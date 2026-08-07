@@ -74,6 +74,8 @@ model Patient {
   createdBy User? @relation("PatientCreatedBy", fields: [createdById], references: [id])
   deletedBy User? @relation("PatientDeletedBy", fields: [deletedById], references: [id])
 
+  followUps FollowUp[]
+
   @@index([fullName])
   @@index([mobile])
   @@index([category])
@@ -95,4 +97,33 @@ model Category {
 
   @@index([active])
   @@map("categories")
+}
+
+model FollowUp {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  patientId String  @db.ObjectId
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  dueDate DateTime
+
+  type     String @default("call")
+  priority String @default("medium")
+  status   String @default("Scheduled")
+
+  notes String?
+
+  outcome     String?
+  completedAt DateTime?
+
+  assignedToId String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([dueDate])
+  @@index([status])
+  @@index([priority])
+  @@map("followUps")
 }
