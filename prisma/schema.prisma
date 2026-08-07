@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  doctor
+  staff
+}
+
+enum PatientGender {
+  Female
+  Male
+  Other
+  Prefer_not_to_say
+}
+
+enum PatientStatus {
+  active
+  archived
+}
+
+model User {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String    @unique
+  password    String
+  role        UserRole  @default(doctor)
+  active      Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  patientsCreated Patient[] @relation("PatientCreatedBy")
+  patientsDeleted Patient[] @relation("PatientDeletedBy")
+
+  @@map("users")
+}
+
+model Patient {
+  id                   String         @id @default(auto()) @map("_id") @db.ObjectId
+  patientCode          String         @unique
+  fullName             String
+  age                  Int?
+  gender               PatientGender?
+  dob                  DateTime?
+  mobile               String
+  whatsapp             String?
+  address              String?
+  city                 String?
+  state                String?
+  category             String         @default("Other")
+  diagnosis            String?
+  history              String?
+  allergies            String?
+  remarks              String?
+  status               PatientStatus  @default(active)
+  nextFollowUp         DateTime?
+  createdById          String?        @db.ObjectId
+  isDeleted            Boolean        @default(false)
+  deletedAt            DateTime?
+  deletedById          String?        @db.ObjectId
+  statusBeforeDeletion PatientStatus?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  createdBy User? @relation("PatientCreatedBy", fields: [createdById], references: [id])
+  deletedBy User? @relation("PatientDeletedBy", fields: [deletedById], references: [id])
+
+  @@index([fullName])
+  @@index([mobile])
+  @@index([category])
+  @@index([status])
+  @@index([nextFollowUp])
+  @@index([isDeleted])
+  @@index([deletedAt])
+  @@index([isDeleted, status, createdAt])
+  @@map("patients")
+}

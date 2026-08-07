@@ -1,0 +1,8 @@
+import { motion } from "framer-motion";
+import { CalendarDays, Clock3, MapPin } from "lucide-react";
+
+export default function DoctorSchedule({ appointments = [], loading }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const schedule = appointments.filter((item) => String(item.date || "").slice(0, 10) === today).slice(0, 4);
+  return <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.2 }} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-slate-800">Today&apos;s Clinic</p><p className="mt-1 text-sm text-slate-500">{new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p></div><div className="rounded-xl bg-teal-50 p-2.5 text-teal-600"><CalendarDays size={19} /></div></div><div className="mt-6 space-y-5">{loading ? <p className="py-8 text-center text-sm text-slate-500">Loading schedule…</p> : schedule.length ? schedule.map((item) => <div key={item.id} className="flex gap-3"><div className="w-16 shrink-0"><p className="flex items-center gap-1 text-xs font-semibold text-indigo-600"><Clock3 size={13} />{item.time}</p></div><div className="min-w-0 border-l-2 border-teal-400 pl-3"><p className="text-sm font-semibold text-slate-700">{item.type}</p><p className="mt-1 flex items-center gap-1 text-xs text-slate-400"><MapPin size={13} />{item.patientName} · {item.clinic}</p></div></div>) : <p className="py-8 text-center text-sm text-slate-500">No appointments scheduled today.</p>}</div></motion.section>;
+}
