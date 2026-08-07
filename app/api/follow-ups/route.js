@@ -1,5 +1,39 @@
 import prisma from "../../../src/lib/prisma";
 
+function validObjectId(value) {
+  return /^[a-f\d]{24}$/i.test(String(value || ""));
+}
+
+function validDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function syncPatientNextFollowUp(patientId) {
+  const next = await prisma.followUp.findFirst({
+    where: {
+      patientId,
+      status: "Scheduled",
+    },
+    orderBy: {
+      dueDate: "asc",
+    },
+    select: {
+      dueDate: true,
+    },
+  });
+
+  await prisma.patient.update({
+    where: {
+      id: patientId,
+    },
+    data: {
+      nextFollowUp: next?.dueDate || null,
+    },
+  });
+}
+
 export async function GET() {
   try {
     const followUps = await prisma.followUp.findMany({
@@ -32,24 +66,73 @@ export async function POST(request) {
   try {
     const body = await request.json();
 
+    const patientId = body.patient || body.patientId;
+    const dueDate = validDate(body.dueDate);
+
+    if (!validObjectId(patientId)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid patient ID",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!dueDate) {
+      return Response.json(
+        {
+          success: false,
+          message: "Valid due date is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    const patient = await prisma.patient.findFirst({
+      where: {
+        id: patientId,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!patient) {
+      return Response.json(
+        {
+          success: false,
+          message: "Patient not found",
+        },
+        { status: 404 }
+      );
+    }
+
     const followUp = await prisma.followUp.create({
       data: {
-        patientId: body.patient,
-        dueDate: new Date(body.dueDate),
+        patientId,
+        dueDate,
         type: body.type || "call",
         priority: body.priority || "medium",
-        status: body.status || "Scheduled",
-        notes: body.notes || null,
+        status: "Scheduled",
+        source: "manual",
+        notes: body.notes ? String(body.notes).trim() : null,
       },
       include: {
         patient: true,
       },
     });
 
-    return Response.json({
-      success: true,
-      followUp,
-    });
+    await syncPatientNextFollowUp(patientId);
+
+    return Response.json(
+      {
+        success: true,
+        followUp,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("CREATE FOLLOW UP ERROR:", error);
 

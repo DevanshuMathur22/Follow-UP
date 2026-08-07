@@ -111,7 +111,8 @@ model FollowUp {
   priority String @default("medium")
   status   String @default("Scheduled")
 
-  notes String?
+  source String  @default("manual")
+  notes  String?
 
   outcome     String?
   completedAt DateTime?

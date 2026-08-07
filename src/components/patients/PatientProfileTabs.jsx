@@ -12,7 +12,9 @@ import {
   UserRound,
   WalletCards,
 } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { formatCurrency, formatDate } from "../../lib/format";
+import { createFollowUp, updateFollowUp } from "../../services/clinicService";
 import PatientTimeline from "./PatientTimeline";
 
 const tabs = [
@@ -40,6 +42,17 @@ function sortedByDate(items, keys) {
     const secondDate = keys.map((key) => second[key]).find(Boolean);
     return toTimestamp(secondDate) - toTimestamp(firstDate);
   });
+}
+
+function dateTimeLocalValue(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-") + `T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function statusTone(value) {
@@ -89,17 +102,90 @@ export default function PatientProfileTabs({
   appointments = [],
   payments = [],
   activities = [],
+  onRefresh,
 }) {
   const [activeTab, setActiveTab] = useState("Overview");
+  const [showFollowUpEditor, setShowFollowUpEditor] = useState(false);
+  const [followUpSaving, setFollowUpSaving] = useState(false);
+  const [followUpForm, setFollowUpForm] = useState({
+    dueDate: "",
+    type: "call",
+    priority: "medium",
+    notes: "",
+  });
 
   useEffect(() => {
     setActiveTab("Overview");
+    setShowFollowUpEditor(false);
   }, [patient?.id]);
 
   const recentFollowUps = useMemo(
     () => sortedByDate(followUps, ["completedAt", "updatedAt", "dueDate", "createdAt"]),
     [followUps],
   );
+
+  const nextScheduledFollowUp = useMemo(
+    () => [...followUps]
+      .filter((followUp) => !["completed", "cancelled"].includes(String(followUp.status || "").toLowerCase()))
+      .sort((first, second) => toTimestamp(first.dueDate) - toTimestamp(second.dueDate))[0] || null,
+    [followUps],
+  );
+
+  function openFollowUpEditor() {
+    setFollowUpForm({
+      dueDate: dateTimeLocalValue(nextScheduledFollowUp?.dueDate || patient?.nextFollowUp),
+      type: String(nextScheduledFollowUp?.type || "call").toLowerCase(),
+      priority: String(nextScheduledFollowUp?.priority || "medium").toLowerCase(),
+      notes: nextScheduledFollowUp?.notes || "",
+    });
+    setShowFollowUpEditor(true);
+  }
+
+  async function saveProfileFollowUp(event) {
+    event.preventDefault();
+
+    if (!followUpForm.dueDate) {
+      toast.error("Select follow-up date and time");
+      return;
+    }
+
+    try {
+      setFollowUpSaving(true);
+
+      if (nextScheduledFollowUp?.id) {
+        await updateFollowUp(nextScheduledFollowUp.id, {
+          dueDate: new Date(followUpForm.dueDate).toISOString(),
+          type: followUpForm.type,
+          priority: followUpForm.priority,
+          notes: followUpForm.notes.trim(),
+          status: "Scheduled",
+          source: "manual",
+        });
+
+        toast.success("Next follow-up changed");
+      } else {
+        await createFollowUp({
+          patientId: patient.id,
+          dueDate: followUpForm.dueDate,
+          type: followUpForm.type,
+          priority: followUpForm.priority,
+          notes: followUpForm.notes.trim(),
+        });
+
+        toast.success("Follow-up scheduled");
+      }
+
+      setShowFollowUpEditor(false);
+
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Unable to save follow-up");
+    } finally {
+      setFollowUpSaving(false);
+    }
+  }
   const recentAppointments = useMemo(
     () => sortedByDate(appointments, ["scheduledAt", "date", "createdAt"]),
     [appointments],
@@ -212,11 +298,99 @@ export default function PatientProfileTabs({
                 <CalendarDays size={19} />
                 <p className="text-sm font-semibold">Care at a glance</p>
               </div>
+
               <div className="mt-5">
                 <p className="text-xs font-semibold tracking-[0.12em] text-teal-700">NEXT FOLLOW-UP</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-800">{formatDate(patient?.nextFollowUp)}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{recentFollowUps[0]?.notes || "No follow-up note has been added yet."}</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-800">
+                  {patient?.nextFollowUp ? formatDate(patient.nextFollowUp) : "Not scheduled"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {nextScheduledFollowUp?.notes || "No follow-up note has been added yet."}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={openFollowUpEditor}
+                  className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
+                >
+                  {nextScheduledFollowUp ? "Change follow-up" : "Schedule follow-up"}
+                </button>
+
+                {showFollowUpEditor && (
+                  <form onSubmit={saveProfileFollowUp} className="mt-4 space-y-3 rounded-xl border border-teal-100 bg-white p-4">
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Date and time
+                      <input
+                        required
+                        type="datetime-local"
+                        value={followUpForm.dueDate}
+                        onChange={(event) => setFollowUpForm({ ...followUpForm, dueDate: event.target.value })}
+                        className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="text-xs font-semibold text-slate-600">
+                        Type
+                        <select
+                          value={followUpForm.type}
+                          onChange={(event) => setFollowUpForm({ ...followUpForm, type: event.target.value })}
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                        >
+                          <option value="call">Call</option>
+                          <option value="visit">Visit</option>
+                          <option value="message">Message</option>
+                          <option value="email">Email</option>
+                        </select>
+                      </label>
+
+                      <label className="text-xs font-semibold text-slate-600">
+                        Priority
+                        <select
+                          value={followUpForm.priority}
+                          onChange={(event) => setFollowUpForm({ ...followUpForm, priority: event.target.value })}
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Notes
+                      <textarea
+                        rows="3"
+                        value={followUpForm.notes}
+                        onChange={(event) => setFollowUpForm({ ...followUpForm, notes: event.target.value })}
+                        placeholder="Reason or instructions"
+                        className="mt-1.5 w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+                      />
+                    </label>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={followUpSaving}
+                        onClick={() => setShowFollowUpEditor(false)}
+                        className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-600"
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={followUpSaving}
+                        className="flex-1 rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {followUpSaving ? "Saving…" : "Save follow-up"}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
+
               <div className="mt-6 grid grid-cols-3 gap-3 border-t border-teal-100 pt-5 text-center">
                 <div><p className="text-lg font-semibold text-slate-800">{appointments.length}</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Visits</p></div>
                 <div><p className="text-lg font-semibold text-slate-800">{followUps.length}</p><p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Follow-ups</p></div>

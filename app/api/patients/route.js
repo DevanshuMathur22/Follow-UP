@@ -158,6 +158,47 @@ export async function POST(request) {
       );
     }
 
+    const category = await prisma.category.findUnique({
+      where: {
+        name: patient.category,
+      },
+    });
+
+    if (category?.followUpIntervalDays) {
+      const nextFollowUp = new Date(patient.createdAt);
+
+      nextFollowUp.setDate(
+        nextFollowUp.getDate() + category.followUpIntervalDays
+      );
+
+      await prisma.patient.update({
+        where: {
+          id: patient.id,
+        },
+        data: {
+          nextFollowUp,
+        },
+      });
+
+      await prisma.followUp.create({
+        data: {
+          patientId: patient.id,
+          dueDate: nextFollowUp,
+          type: "call",
+          priority: "medium",
+          status: "Scheduled",
+          source: "category",
+          notes: "Auto generated follow-up",
+        },
+      });
+
+      patient = await prisma.patient.findUnique({
+        where:{
+          id:patient.id,
+        },
+      });
+    }
+
     return Response.json(
       {
         success: true,

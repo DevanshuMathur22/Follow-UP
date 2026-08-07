@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
+  CheckCircle2,
   CircleDollarSign,
   FileClock,
   FileText,
   PhoneCall,
   Pill,
   TriangleAlert,
-  UserPlus,
   UsersRound,
 } from "lucide-react";
 import DashboardLayout from "../components/layout/DashboardLayout";
@@ -387,11 +387,18 @@ export default function Dashboard() {
   }
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  const completedToday = liveFollowUps.filter(
+    (followUp) =>
+      normalizedStatus(followUp.status) === "completed" &&
+      isToday(followUp.completedAt || followUp.updatedAt, now)
+  ).length;
+
   const stats = [
     { title: "Today’s Calls", value: summary.todayCalls, detail: "Due for follow-up today", icon: PhoneCall, tone: "indigo" },
     { title: "Upcoming Follow-ups", value: summary.upcoming, detail: "Already scheduled", icon: CalendarDays, tone: "teal" },
     { title: "Overdue Follow-ups", value: summary.overdue, detail: "Need attention today", icon: TriangleAlert, tone: "amber" },
-    { title: "Total Patients", value: summary.patients, detail: "Active clinic records", icon: UserPlus, tone: "rose" },
+    { title: "Completed Today", value: completedToday, detail: "Follow-ups completed today", icon: CheckCircle2, tone: "emerald" },
   ];
 
   return (

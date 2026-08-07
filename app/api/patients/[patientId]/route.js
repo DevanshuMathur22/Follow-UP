@@ -119,6 +119,7 @@ export async function PATCH(request, { params }) {
       },
       select: {
         id: true,
+        category: true,
       },
     });
 
@@ -132,11 +133,112 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    const patient = await prisma.patient.update({
+    const categoryChanged =
+      updates.category !== undefined &&
+      String(updates.category).toLowerCase() !==
+        String(existingPatient.category || "").toLowerCase();
+
+    let selectedCategory = null;
+
+    if (categoryChanged) {
+      selectedCategory = await prisma.category.findFirst({
+        where: {
+          name: {
+            equals: updates.category,
+            mode: "insensitive",
+          },
+          active: true,
+        },
+      });
+
+      if (!selectedCategory) {
+        return Response.json(
+          {
+            success: false,
+            message: "Active category not found",
+          },
+          { status: 400 }
+        );
+      }
+
+      updates.category = selectedCategory.name;
+    }
+
+    await prisma.patient.update({
       where: {
         id: patientId,
       },
       data: updates,
+    });
+
+    if (categoryChanged && selectedCategory) {
+      const dueDate = new Date();
+      dueDate.setDate(
+        dueDate.getDate() + selectedCategory.followUpIntervalDays
+      );
+
+      const categoryFollowUp = await prisma.followUp.findFirst({
+        where: {
+          patientId,
+          status: "Scheduled",
+          source: "category",
+        },
+        orderBy: {
+          dueDate: "asc",
+        },
+      });
+
+      if (categoryFollowUp) {
+        await prisma.followUp.update({
+          where: {
+            id: categoryFollowUp.id,
+          },
+          data: {
+            dueDate,
+            notes: `Category follow-up: ${selectedCategory.name}`,
+          },
+        });
+      } else {
+        await prisma.followUp.create({
+          data: {
+            patientId,
+            dueDate,
+            type: "call",
+            priority: "medium",
+            status: "Scheduled",
+            source: "category",
+            notes: `Category follow-up: ${selectedCategory.name}`,
+          },
+        });
+      }
+
+      const nextFollowUp = await prisma.followUp.findFirst({
+        where: {
+          patientId,
+          status: "Scheduled",
+        },
+        orderBy: {
+          dueDate: "asc",
+        },
+        select: {
+          dueDate: true,
+        },
+      });
+
+      await prisma.patient.update({
+        where: {
+          id: patientId,
+        },
+        data: {
+          nextFollowUp: nextFollowUp?.dueDate || null,
+        },
+      });
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: {
+        id: patientId,
+      },
     });
 
     return Response.json({

@@ -228,7 +228,7 @@ export default function PatientProfile() {
             </button>
           </div>
         )}
-        <PatientProfileTabs patient={patient} {...related} />
+        <PatientProfileTabs patient={patient} {...related} onRefresh={loadProfile} />
       </section>
       </>
       )}
