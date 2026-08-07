@@ -62,13 +62,7 @@ function appointmentHref(patient) {
   return `/appointments?patient=${encodeURIComponent(patient.id)}`;
 }
 
-export default function PatientTable({
-  patients = [],
-  loading,
-  error,
-  onRetry,
-  onArchive,
-}) {
+export default function PatientTable({ patients = [], loading, error, onRetry }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
@@ -422,17 +416,6 @@ export default function PatientTable({
                             Message on WhatsApp
                           </a>
                         ) : null}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenActionId("");
-                            onArchive?.(patient);
-                          }}
-                          className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50 hover:text-rose-700"
-                        >
-                          Archive patient
-                        </button>
                       </div>
                     )}
                   </td>

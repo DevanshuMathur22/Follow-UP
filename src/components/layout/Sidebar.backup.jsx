@@ -2,7 +2,6 @@
 
 import {
   Activity,
-  Archive,
   BarChart3,
   CalendarDays,
   ClipboardList,
@@ -30,7 +29,6 @@ const navigation = [
     title: "PATIENTS",
     items: [
       { name: "All Patients", path: "/patients", icon: Users },
-      { name: "Archived Patients", path: "/patients/archived", icon: Archive },
       { name: "Categories", path: "/categories", icon: Tags },
       { name: "Follow-ups", path: "/follow-ups", icon: Activity },
       { name: "Tasks", path: "/tasks", icon: ClipboardList },

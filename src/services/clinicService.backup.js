@@ -376,59 +376,6 @@ export async function updatePatient(patientId, input) {
   return normalizePatient(result.patient || result);
 }
 
-export async function archivePatient(patientId) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.delete(`/patients/${patientId}`)),
-    () => {
-      const store = getStore();
-      const patient = store.patients.find((item) => getId(item) === patientId);
-      if (!patient) throw new Error("Patient not found");
-
-      patient.statusBeforeDeletion = patient.status;
-      patient.status = "archived";
-      patient.isDeleted = true;
-      patient.deletedAt = new Date().toISOString();
-
-      saveStore(store);
-      return patient;
-    },
-  );
-
-  return normalizePatient(result.patient || result);
-}
-
-export async function getArchivedPatients() {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/patients/archived")),
-    () => getStore().patients.filter((patient) => patient.isDeleted),
-  );
-
-  const items = Array.isArray(result) ? result : result?.patients || [];
-  return items.map(normalizePatient);
-}
-
-export async function restorePatient(patientId) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.patch(`/patients/${patientId}/restore`)),
-    () => {
-      const store = getStore();
-      const patient = store.patients.find((item) => getId(item) === patientId);
-
-      if (!patient) throw new Error("Patient not found");
-
-      patient.isDeleted = false;
-      patient.deletedAt = null;
-      patient.status = patient.statusBeforeDeletion || "active";
-      patient.statusBeforeDeletion = null;
-
-      saveStore(store);
-      return patient;
-    },
-  );
-
-  return normalizePatient(result.patient || result);
-}
-
 export async function getCategories() {
   const result = await requestOrDemo(
     async () => unwrap(await api.get("/categories")),

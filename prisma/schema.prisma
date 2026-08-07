@@ -39,6 +39,8 @@ model User {
   patientsCreated Patient[] @relation("PatientCreatedBy")
   patientsDeleted Patient[] @relation("PatientDeletedBy")
 
+  @@index([role])
+  @@index([active])
   @@map("users")
 }
 
@@ -81,4 +83,16 @@ model Patient {
   @@index([deletedAt])
   @@index([isDeleted, status, createdAt])
   @@map("patients")
+}
+
+model Category {
+  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String   @unique
+  followUpIntervalDays Int      @default(30)
+  active               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([active])
+  @@map("categories")
 }
