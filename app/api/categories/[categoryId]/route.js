@@ -1,10 +1,46 @@
 import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
-import { forbiddenResponse, hasPermission, permissions } from "../../../../src/lib/permissions";
+import { readJsonBody } from "../../../../src/lib/requestBody";
+import {
+  validObjectId,
+  validText,
+} from "../../../../src/lib/inputValidation";
+import {
+  forbiddenResponse,
+  hasPermission,
+  permissions,
+} from "../../../../src/lib/permissions";
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 
-function validObjectId(value) {
-  return /^[a-f\d]{24}$/i.test(String(value || ""));
+function parseInterval(value, fallback) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (
+    value === null ||
+    (typeof value !== "number" && typeof value !== "string")
+  ) {
+    return null;
+  }
+
+  const text = String(value).trim();
+
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+
+  const days = Number(text);
+
+  if (
+    !Number.isInteger(days) ||
+    days < 1 ||
+    days > 3650
+  ) {
+    return null;
+  }
+
+  return days;
 }
 
 function calculateNextDate(days) {
@@ -97,7 +133,12 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    if (!hasPermission(sessionUser.role, permissions.MANAGE_CATEGORIES)) {
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.MANAGE_CATEGORIES,
+      )
+    ) {
       return forbiddenResponse();
     }
 
@@ -105,9 +146,18 @@ export async function PATCH(request, { params }) {
 
     if (!validObjectId(categoryId)) {
       return Response.json(
-        { message: "Invalid category ID" },
-        { status: 400 }
+        {
+          message: "Invalid category ID",
+        },
+        { status: 400 },
       );
+    }
+
+    const { data: body, error: bodyError } =
+      await readJsonBody(request);
+
+    if (bodyError) {
+      return bodyError;
     }
 
     const current = await prisma.category.findUnique({
@@ -118,46 +168,88 @@ export async function PATCH(request, { params }) {
 
     if (!current) {
       return Response.json(
-        { message: "Category not found" },
-        { status: 404 }
+        {
+          message: "Category not found",
+        },
+        { status: 404 },
       );
     }
 
-    const body = await request.json();
+    let name = current.name;
 
-    const name =
-      body.name !== undefined
-        ? String(body.name).trim()
-        : current.name;
+    if (body.name !== undefined) {
+      if (typeof body.name !== "string") {
+        return Response.json(
+          {
+            message: "Invalid category name",
+          },
+          { status: 400 },
+        );
+      }
 
-    const followUpIntervalDays =
-      body.followUpIntervalDays !== undefined
-        ? Number(body.followUpIntervalDays)
-        : current.followUpIntervalDays;
+      name = body.name.trim();
 
-    const active =
-      body.active !== undefined
-        ? Boolean(body.active)
-        : current.active;
+      if (!name) {
+        return Response.json(
+          {
+            message: "Category name is required",
+          },
+          { status: 400 },
+        );
+      }
 
-    const applyToPatients = Boolean(body.applyToPatients);
+      if (!validText(name, 100)) {
+        return Response.json(
+          {
+            message: "Category name is too long",
+          },
+          { status: 400 },
+        );
+      }
+    }
 
-    if (!name) {
+    const followUpIntervalDays = parseInterval(
+      body.followUpIntervalDays,
+      current.followUpIntervalDays,
+    );
+
+    if (!followUpIntervalDays) {
       return Response.json(
-        { message: "Category name is required" },
-        { status: 400 }
+        {
+          message: "Invalid follow-up interval",
+        },
+        { status: 400 },
       );
     }
 
-    if (
-      !Number.isInteger(followUpIntervalDays) ||
-      followUpIntervalDays < 1 ||
-      followUpIntervalDays > 365
-    ) {
-      return Response.json(
-        { message: "Follow-up interval must be between 1 and 365 days" },
-        { status: 400 }
-      );
+    let active = current.active;
+
+    if (body.active !== undefined) {
+      if (typeof body.active !== "boolean") {
+        return Response.json(
+          {
+            message: "Invalid active value",
+          },
+          { status: 400 },
+        );
+      }
+
+      active = body.active;
+    }
+
+    let applyToPatients = false;
+
+    if (body.applyToPatients !== undefined) {
+      if (typeof body.applyToPatients !== "boolean") {
+        return Response.json(
+          {
+            message: "Invalid applyToPatients value",
+          },
+          { status: 400 },
+        );
+      }
+
+      applyToPatients = body.applyToPatients;
     }
 
     const duplicate = await prisma.category.findFirst({
@@ -174,8 +266,10 @@ export async function PATCH(request, { params }) {
 
     if (duplicate) {
       return Response.json(
-        { message: "Category already exists" },
-        { status: 409 }
+        {
+          message: "Category already exists",
+        },
+        { status: 409 },
       );
     }
 
@@ -190,7 +284,10 @@ export async function PATCH(request, { params }) {
       },
     });
 
-    if (current.name.toLowerCase() !== name.toLowerCase()) {
+    if (
+      current.name.toLowerCase() !==
+      name.toLowerCase()
+    ) {
       await prisma.patient.updateMany({
         where: {
           category: {
@@ -225,8 +322,9 @@ export async function PATCH(request, { params }) {
         await applyCategoryRule(
           patient.id,
           category.name,
-          category.followUpIntervalDays
+          category.followUpIntervalDays,
         );
+
         processedPatients += 1;
       }
     }
@@ -241,8 +339,10 @@ export async function PATCH(request, { params }) {
     console.error("UPDATE CATEGORY ERROR:", error);
 
     return Response.json(
-      { message: "Failed to update category" },
-      { status: 500 }
+      {
+        message: "Failed to update category",
+      },
+      { status: 500 },
     );
   }
 }

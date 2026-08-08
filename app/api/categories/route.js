@@ -1,7 +1,41 @@
 import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
-import { forbiddenResponse, hasPermission, permissions } from "../../../src/lib/permissions";
+import { readJsonBody } from "../../../src/lib/requestBody";
+import { validText } from "../../../src/lib/inputValidation";
+import {
+  forbiddenResponse,
+  hasPermission,
+  permissions,
+} from "../../../src/lib/permissions";
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
+
+function parseInterval(value, fallback = null) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  if (typeof value !== "number" && typeof value !== "string") {
+    return null;
+  }
+
+  const text = String(value).trim();
+
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+
+  const days = Number(text);
+
+  if (
+    !Number.isInteger(days) ||
+    days < 1 ||
+    days > 3650
+  ) {
+    return null;
+  }
+
+  return days;
+}
 
 export async function GET() {
   try {
@@ -34,7 +68,7 @@ export async function GET() {
       {
         message: "Failed to load categories",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -59,34 +93,62 @@ export async function POST(request) {
       );
     }
 
-    if (!hasPermission(sessionUser.role, permissions.MANAGE_CATEGORIES)) {
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.MANAGE_CATEGORIES,
+      )
+    ) {
       return forbiddenResponse();
     }
 
-    const body = await request.json();
+    const { data: body, error: bodyError } =
+      await readJsonBody(request);
 
-    const name = String(body.name || "").trim();
-    const followUpIntervalDays = Number(body.followUpIntervalDays || 30);
+    if (bodyError) {
+      return bodyError;
+    }
+
+    if (typeof body.name !== "string") {
+      return Response.json(
+        {
+          message: "Category name is required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const name = body.name.trim();
 
     if (!name) {
       return Response.json(
         {
           message: "Category name is required",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (
-      !Number.isInteger(followUpIntervalDays) ||
-      followUpIntervalDays < 1 ||
-      followUpIntervalDays > 3650
-    ) {
+    if (!validText(name, 100)) {
+      return Response.json(
+        {
+          message: "Category name is too long",
+        },
+        { status: 400 },
+      );
+    }
+
+    const followUpIntervalDays = parseInterval(
+      body.followUpIntervalDays,
+      30,
+    );
+
+    if (!followUpIntervalDays) {
       return Response.json(
         {
           message: "Invalid follow-up interval",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -104,7 +166,7 @@ export async function POST(request) {
         {
           message: "Category already exists",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 
@@ -124,7 +186,7 @@ export async function POST(request) {
       {
         message: "Failed to create category",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

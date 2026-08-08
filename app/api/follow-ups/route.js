@@ -1,13 +1,17 @@
 import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
+import { readJsonBody } from "../../../src/lib/requestBody";
+import {
+  validObjectId,
+  validText,
+} from "../../../src/lib/inputValidation";
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 import { logActivity } from "../../../src/lib/activityLog";
 
-function validObjectId(value) {
-  return /^[a-f\d]{24}$/i.test(String(value || ""));
-}
+const priorities = ["low", "medium", "high"];
+const types = ["call", "visit", "message", "email"];
 
-function validDate(value) {
+function parseDate(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -28,9 +32,7 @@ async function syncPatientNextFollowUp(patientId) {
   });
 
   await prisma.patient.update({
-    where: {
-      id: patientId,
-    },
+    where: { id: patientId },
     data: {
       nextFollowUp: next?.dueDate || null,
     },
@@ -72,7 +74,7 @@ export async function GET() {
         success: false,
         message: "Failed to load follow-ups",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -97,10 +99,19 @@ export async function POST(request) {
       );
     }
 
-    const body = await request.json();
+    const { data: body, error: bodyError } =
+      await readJsonBody(request);
+
+    if (bodyError) {
+      return bodyError;
+    }
 
     const patientId = body.patient || body.patientId;
-    const dueDate = validDate(body.dueDate);
+    const dueDate = parseDate(body.dueDate);
+    const type = String(body.type || "call").toLowerCase();
+    const priority = String(
+      body.priority || "medium",
+    ).toLowerCase();
 
     if (!validObjectId(patientId)) {
       return Response.json(
@@ -108,7 +119,7 @@ export async function POST(request) {
           success: false,
           message: "Invalid patient ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -118,7 +129,53 @@ export async function POST(request) {
           success: false,
           message: "Valid due date is required",
         },
-        { status: 400 }
+        { status: 400 },
+      );
+    }
+
+    if (!types.includes(type)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid follow-up type",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!priorities.includes(priority)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid priority",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.notes !== undefined &&
+      body.notes !== null &&
+      typeof body.notes !== "string"
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid notes",
+        },
+        { status: 400 },
+      );
+    }
+
+    const notes = body.notes ? body.notes.trim() : null;
+
+    if (!validText(notes, 3000)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Notes are too long",
+        },
+        { status: 400 },
       );
     }
 
@@ -138,7 +195,7 @@ export async function POST(request) {
           success: false,
           message: "Patient not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -146,11 +203,11 @@ export async function POST(request) {
       data: {
         patientId,
         dueDate,
-        type: body.type || "call",
-        priority: body.priority || "medium",
+        type,
+        priority,
         status: "Scheduled",
         source: "manual",
-        notes: body.notes ? String(body.notes).trim() : null,
+        notes,
       },
       include: {
         patient: true,
@@ -175,7 +232,7 @@ export async function POST(request) {
         success: true,
         followUp,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("CREATE FOLLOW UP ERROR:", error);
@@ -185,7 +242,7 @@ export async function POST(request) {
         success: false,
         message: "Failed to create follow-up",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

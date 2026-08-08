@@ -1,4 +1,9 @@
 import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
+import { readJsonBody } from "../../../../src/lib/requestBody";
+import {
+  validObjectId,
+  validText,
+} from "../../../../src/lib/inputValidation";
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 import { logActivity } from "../../../../src/lib/activityLog";
@@ -6,10 +11,7 @@ import { logActivity } from "../../../../src/lib/activityLog";
 const statuses = ["Scheduled", "Completed", "Cancelled"];
 const priorities = ["low", "medium", "high"];
 const types = ["call", "visit", "message", "email"];
-
-function validObjectId(value) {
-  return /^[a-f\d]{24}$/i.test(String(value || ""));
-}
+const sources = ["manual", "category"];
 
 function parseDate(value) {
   if (!value) return null;
@@ -69,7 +71,7 @@ export async function PATCH(request, { params }) {
           success: false,
           message: "Invalid follow-up ID",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -85,11 +87,16 @@ export async function PATCH(request, { params }) {
           success: false,
           message: "Follow-up not found",
         },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    const body = await request.json();
+    const { data: body, error: bodyError } = await readJsonBody(request);
+
+    if (bodyError) {
+      return bodyError;
+    }
+
     const updates = {};
 
     if (body.status !== undefined) {
@@ -99,7 +106,7 @@ export async function PATCH(request, { params }) {
             success: false,
             message: "Invalid follow-up status",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -115,7 +122,7 @@ export async function PATCH(request, { params }) {
             success: false,
             message: "Invalid due date",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -131,7 +138,7 @@ export async function PATCH(request, { params }) {
             success: false,
             message: "Invalid follow-up type",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -147,7 +154,7 @@ export async function PATCH(request, { params }) {
             success: false,
             message: "Invalid priority",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -157,13 +164,13 @@ export async function PATCH(request, { params }) {
     if (body.source !== undefined) {
       const source = String(body.source).toLowerCase();
 
-      if (!["manual", "category"].includes(source)) {
+      if (!sources.includes(source)) {
         return Response.json(
           {
             success: false,
             message: "Invalid follow-up source",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -171,11 +178,51 @@ export async function PATCH(request, { params }) {
     }
 
     if (body.notes !== undefined) {
-      updates.notes = body.notes ? String(body.notes).trim() : null;
+      if (body.notes !== null && typeof body.notes !== "string") {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid notes",
+          },
+          { status: 400 },
+        );
+      }
+
+      updates.notes = body.notes ? body.notes.trim() : null;
+
+      if (!validText(updates.notes, 3000)) {
+        return Response.json(
+          {
+            success: false,
+            message: "Notes are too long",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     if (body.outcome !== undefined) {
-      updates.outcome = body.outcome ? String(body.outcome).trim() : null;
+      if (body.outcome !== null && typeof body.outcome !== "string") {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid outcome",
+          },
+          { status: 400 },
+        );
+      }
+
+      updates.outcome = body.outcome ? body.outcome.trim() : null;
+
+      if (!validText(updates.outcome, 1000)) {
+        return Response.json(
+          {
+            success: false,
+            message: "Outcome is too long",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     if (body.completedAt !== undefined) {
@@ -190,12 +237,26 @@ export async function PATCH(request, { params }) {
               success: false,
               message: "Invalid completion date",
             },
-            { status: 400 }
+            { status: 400 },
           );
         }
 
         updates.completedAt = completedAt;
       }
+    }
+
+    const effectiveStatus = updates.status || existing.status;
+    const effectiveOutcome =
+      body.outcome !== undefined ? updates.outcome : existing.outcome;
+
+    if (effectiveStatus === "Completed" && !effectiveOutcome) {
+      return Response.json(
+        {
+          success: false,
+          message: "Outcome is required when completing a follow-up",
+        },
+        { status: 400 },
+      );
     }
 
     if (updates.status === "Completed" && body.completedAt === undefined) {
@@ -204,6 +265,88 @@ export async function PATCH(request, { params }) {
 
     if (updates.status === "Scheduled") {
       updates.completedAt = null;
+    }
+
+    let nextFollowUpData = null;
+
+    if (body.nextDueDate) {
+      const nextDueDate = parseDate(body.nextDueDate);
+
+      if (!nextDueDate) {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid next follow-up date",
+          },
+          { status: 400 },
+        );
+      }
+
+      const nextType = String(
+        body.nextType || existing.type || "call",
+      ).toLowerCase();
+
+      const nextPriority = String(
+        body.nextPriority || existing.priority || "medium",
+      ).toLowerCase();
+
+      if (!types.includes(nextType)) {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid next follow-up type",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!priorities.includes(nextPriority)) {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid next follow-up priority",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (
+        body.nextNotes !== undefined &&
+        body.nextNotes !== null &&
+        typeof body.nextNotes !== "string"
+      ) {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid next follow-up notes",
+          },
+          { status: 400 },
+        );
+      }
+
+      const nextNotes = body.nextNotes
+        ? body.nextNotes.trim()
+        : "Next follow-up after previous completion";
+
+      if (!validText(nextNotes, 3000)) {
+        return Response.json(
+          {
+            success: false,
+            message: "Next follow-up notes are too long",
+          },
+          { status: 400 },
+        );
+      }
+
+      nextFollowUpData = {
+        patientId: existing.patientId,
+        dueDate: nextDueDate,
+        type: nextType,
+        priority: nextPriority,
+        status: "Scheduled",
+        source: "manual",
+        notes: nextNotes,
+      };
     }
 
     const followUp = await prisma.followUp.update({
@@ -218,30 +361,9 @@ export async function PATCH(request, { params }) {
 
     let nextFollowUp = null;
 
-    if (body.nextDueDate) {
-      const nextDueDate = parseDate(body.nextDueDate);
-
-      if (!nextDueDate) {
-        return Response.json(
-          {
-            success: false,
-            message: "Invalid next follow-up date",
-          },
-          { status: 400 }
-        );
-      }
-
+    if (nextFollowUpData) {
       nextFollowUp = await prisma.followUp.create({
-        data: {
-          patientId: existing.patientId,
-          dueDate: nextDueDate,
-          type: body.nextType || existing.type || "call",
-          priority: body.nextPriority || existing.priority || "medium",
-          status: "Scheduled",
-          notes: body.nextNotes
-            ? String(body.nextNotes).trim()
-            : "Next follow-up after previous completion",
-        },
+        data: nextFollowUpData,
         include: {
           patient: true,
         },
@@ -277,7 +399,7 @@ export async function PATCH(request, { params }) {
 
     if (nextFollowUp) {
       await logActivity({
-      actor: sessionUser,
+        actor: sessionUser,
         module: "follow-up",
         action: "scheduled",
         title: "Next follow-up scheduled",
@@ -301,7 +423,7 @@ export async function PATCH(request, { params }) {
         success: false,
         message: "Failed to update follow-up",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
