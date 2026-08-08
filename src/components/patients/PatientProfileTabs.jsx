@@ -445,23 +445,98 @@ export default function PatientProfileTabs({
 
         {activeTab === "Follow-ups" && (
           <div>
-            <RecordHeader title="Follow-ups" description="Call outcomes, reminders, and outstanding clinical follow-ups." count={followUps.length} icon={Activity} tone="bg-amber-50 text-amber-700" />
+            <RecordHeader
+              title="Follow-up history"
+              description="Scheduled follow-ups, completed outcomes, and callback notes."
+              count={followUps.length}
+              icon={Activity}
+              tone="bg-amber-50 text-amber-700"
+            />
+
             {recentFollowUps.length ? (
-              <div className="space-y-3">
-                {recentFollowUps.map((followUp) => (
-                  <article key={followUp.id} className="rounded-xl border border-slate-200 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-700">{followUp.category || patient?.category || "Clinical"} follow-up</p>
-                        <p className="mt-1 text-sm text-slate-500">Due {formatDate(followUp.dueDate)}</p>
-                      </div>
-                      <span className={`w-fit rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusTone(followUp.status)}`}>{followUp.status || "Scheduled"}</span>
+              <div className="relative space-y-4">
+                <div className="absolute bottom-6 left-[9px] top-6 w-px bg-slate-200" />
+
+                {recentFollowUps.map((followUp) => {
+                  const status = String(followUp.status || "Scheduled");
+                  const type = String(followUp.type || "call");
+                  const priority = String(followUp.priority || "medium");
+                  const [outcomeType, ...outcomeDetails] = String(followUp.outcome || "").split(" — ");
+                  const outcomeNote = outcomeDetails.join(" — ");
+
+                  return (
+                    <div key={followUp.id} className="relative pl-8">
+                      <div className={`absolute left-0 top-5 size-[19px] rounded-full border-4 border-white ${
+                        status.toLowerCase() === "completed"
+                          ? "bg-emerald-500"
+                          : status.toLowerCase() === "cancelled"
+                            ? "bg-slate-400"
+                            : "bg-amber-500"
+                      }`} />
+
+                      <article className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="font-semibold capitalize text-slate-700">
+                              {type} follow-up
+                            </p>
+
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                              <span>Due {formatDate(followUp.dueDate)}</span>
+                              <span>•</span>
+                              <span className="capitalize">{priority} priority</span>
+                            </div>
+                          </div>
+
+                          <span className={`w-fit rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusTone(status)}`}>
+                            {status}
+                          </span>
+                        </div>
+
+                        {followUp.outcome && (
+                          <div className="mt-4 rounded-lg bg-emerald-50/70 p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                              Outcome
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-slate-700">
+                              {outcomeType}
+                            </p>
+                            {outcomeNote && (
+                              <p className="mt-1 text-sm leading-6 text-slate-600">
+                                {outcomeNote}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {followUp.notes && (
+                          <div className="mt-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                              Notes
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">
+                              {followUp.notes}
+                            </p>
+                          </div>
+                        )}
+
+                        {followUp.completedAt && (
+                          <p className="mt-3 text-xs font-medium text-emerald-700">
+                            Completed {formatDate(followUp.completedAt)}
+                          </p>
+                        )}
+                      </article>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-600">{followUp.notes || "No notes recorded for this follow-up."}</p>
-                  </article>
-                ))}
+                  );
+                })}
               </div>
-            ) : <EmptyState icon={Activity} title="No follow-ups yet" description="Scheduled calls and outcomes will appear here." />}
+            ) : (
+              <EmptyState
+                icon={Activity}
+                title="No follow-ups yet"
+                description="Scheduled calls and completed outcomes will appear here."
+              />
+            )}
           </div>
         )}
 
