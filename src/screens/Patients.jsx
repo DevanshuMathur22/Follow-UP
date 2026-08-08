@@ -1,15 +1,26 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Tags } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import PatientTable from "../components/patients/PatientTable";
-import { archivePatient, getPatients } from "../services/clinicService";
+import {
+  archivePatient,
+  getPatients,
+} from "../services/clinicService";
+import { getCurrentUser } from "../services/authService";
+import {
+  hasPermission,
+  permissions,
+} from "../lib/permissions";
 
 export default function Patients() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [canArchive, setCanArchive] = useState(false);
 
   async function loadPatients() {
     try {
@@ -17,15 +28,35 @@ export default function Patients() {
       setLoading(true);
       setPatients(await getPatients());
     } catch (loadError) {
-      setError(loadError.response?.data?.message || "Patients could not be loaded.");
+      setError(
+        loadError.response?.data?.message ||
+          "Patients could not be loaded.",
+      );
     } finally {
       setLoading(false);
     }
   }
 
+  async function loadAccess() {
+    try {
+      const user = await getCurrentUser();
+
+      setCanArchive(
+        hasPermission(
+          user?.role,
+          permissions.ARCHIVE_PATIENTS,
+        ),
+      );
+    } catch {
+      setCanArchive(false);
+    }
+  }
+
   async function handleArchive(patient) {
+    if (!canArchive) return;
+
     const confirmed = window.confirm(
-      `Archive ${patient.fullName}?\n\nThe patient will not be permanently deleted.`
+      `Archive ${patient.fullName}?\n\nThe patient will not be permanently deleted.`,
     );
 
     if (!confirmed) return;
@@ -34,19 +65,23 @@ export default function Patients() {
       await archivePatient(patient.id);
 
       setPatients((current) =>
-        current.filter((item) => item.id !== patient.id)
+        current.filter(
+          (item) => item.id !== patient.id,
+        ),
       );
 
       toast.success("Patient archived");
     } catch (archiveError) {
       toast.error(
-        archiveError.response?.data?.message || "Unable to archive patient"
+        archiveError.response?.data?.message ||
+          "Unable to archive patient",
       );
     }
   }
 
   useEffect(() => {
     loadPatients();
+    loadAccess();
   }, []);
 
   return (
@@ -62,27 +97,17 @@ export default function Patients() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Search, filter, and manage complete patient records.
+            Search and manage patient records and follow-ups.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/categories"
-            className="flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-700 transition hover:bg-violet-100"
-          >
-            <Tags size={18} />
-            Manage Categories
-          </Link>
-
-          <Link
-            href="/patients/add"
-            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-100 transition hover:-translate-y-0.5"
-          >
-            <Plus size={18} />
-            Add Patient
-          </Link>
-        </div>
+        <Link
+          href="/patients/add"
+          className="flex w-fit items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
+        >
+          <Plus size={18} />
+          Add Patient
+        </Link>
       </div>
 
       <section className="mt-8">
@@ -92,6 +117,7 @@ export default function Patients() {
           error={error}
           onRetry={loadPatients}
           onArchive={handleArchive}
+          canArchive={canArchive}
         />
       </section>
     </DashboardLayout>
