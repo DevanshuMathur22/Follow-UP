@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 
 function validObjectId(value) {
@@ -6,6 +7,18 @@ function validObjectId(value) {
 
 export async function GET(request) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get("patient")?.trim() || "";
     const module = searchParams.get("module")?.trim() || "";

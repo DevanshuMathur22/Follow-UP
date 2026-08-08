@@ -15,9 +15,9 @@ export default function Login() {
 
       const data = mode === "register" ? await registerUser(formData) : await loginUser(formData);
 
-      localStorage.setItem("caretrack-token", data.token);
+      localStorage.removeItem("caretrack-token");
       localStorage.setItem("caretrack-user", JSON.stringify(data.user));
-      toast.success(data.isDemo ? "Demo workspace opened" : mode === "register" ? "Clinic account created" : "Login successful");
+      toast.success(mode === "register" ? "Clinic account created" : "Login successful");
       router.replace("/dashboard");
     } catch (error) {
       toast.error(error.response?.data?.message || (mode === "register" ? "Unable to create account. Try again." : "Unable to sign in. Try again."));

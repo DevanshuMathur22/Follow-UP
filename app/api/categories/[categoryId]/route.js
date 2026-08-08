@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 
 function validObjectId(value) {
@@ -76,6 +77,18 @@ async function applyCategoryRule(patientId, categoryName, days) {
 
 export async function PATCH(request, { params }) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { categoryId } = await params;
 
     if (!validObjectId(categoryId)) {

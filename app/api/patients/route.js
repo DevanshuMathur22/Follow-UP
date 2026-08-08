@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 import { logActivity } from "../../../src/lib/activityLog";
 
@@ -60,6 +61,18 @@ async function generatePatientCode() {
 
 export async function GET(request) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
 
@@ -115,6 +128,18 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
     const data = cleanPatient(body);
 
@@ -140,6 +165,7 @@ export async function POST(request) {
             patientCode: await generatePatientCode(),
             status: "active",
             isDeleted: false,
+            createdById: sessionUser.id,
           },
         });
 

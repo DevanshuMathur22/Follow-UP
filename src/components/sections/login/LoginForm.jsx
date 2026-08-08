@@ -29,13 +29,6 @@ export default function LoginForm({ onSubmit, loading, mode, onModeChange }) {
     onSubmit?.(formData);
   }
 
-  function useDemoAccount() {
-    setFormData({
-      email: "doctor@caretrack.demo",
-      password: "CareTrack@2026",
-    });
-  }
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-violet-50 p-4 sm:p-6 lg:p-8">
       <section className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-indigo-100/60 lg:grid-cols-2">
@@ -194,16 +187,10 @@ export default function LoginForm({ onSubmit, loading, mode, onModeChange }) {
               {mode === "login" ? "Set up a new clinic account" : "Already have an account? Sign in"}
             </button>
 
-            {mode === "login" && <button
-              type="button"
-              onClick={useDemoAccount}
-              className="mt-4 w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100"
-            >
-              Use demo workspace
-            </button>}
-
             <p className="mt-8 text-center text-xs leading-5 text-slate-400">
-              {mode === "login" ? "Demo: doctor@caretrack.demo · CareTrack@2026" : "Registration is available when enabled by the server."}
+              {mode === "login"
+                ? "Authorized clinic access only."
+                : "Only the first clinic account can be registered."}
             </p>
           </div>
         </motion.div>

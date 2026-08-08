@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 import { logActivity } from "../../../../src/lib/activityLog";
 
@@ -41,6 +42,18 @@ async function syncPatientNextFollowUp(patientId) {
 
 export async function PATCH(request, { params }) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { followUpId } = await params;
 
     if (!validObjectId(followUpId)) {

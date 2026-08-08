@@ -308,7 +308,6 @@ export default function Settings() {
     try {
       setSavingPassword(true);
       const session = await changePassword({ currentPassword: passwords.currentPassword, newPassword: passwords.newPassword });
-      if (session.token) window.localStorage.setItem("caretrack-token", session.token);
       if (session.user) {
         window.localStorage.setItem("caretrack-user", JSON.stringify(session.user));
         setSessionUser(session.user);

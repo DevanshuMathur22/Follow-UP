@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../../../src/lib/auth";
 import prisma from "../../../../../src/lib/prisma";
 import { logActivity } from "../../../../../src/lib/activityLog";
 
@@ -7,6 +8,18 @@ function validObjectId(value) {
 
 export async function PATCH(request, { params }) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { patientId } = await params;
 
     if (!validObjectId(patientId)) {

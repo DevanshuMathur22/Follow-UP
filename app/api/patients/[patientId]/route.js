@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 import { logActivity } from "../../../../src/lib/activityLog";
 
@@ -69,6 +70,18 @@ function validateUpdates(data) {
 
 export async function GET(request, { params }) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { patientId } = await params;
 
     const patient = await prisma.patient.findFirst({
@@ -107,6 +120,18 @@ export async function GET(request, { params }) {
 
 export async function PATCH(request, { params }) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { patientId } = await params;
     const body = await request.json();
     const updates = buildUpdates(body);
@@ -290,6 +315,18 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const { patientId } = await params;
 
     const existingPatient = await prisma.patient.findFirst({
@@ -318,6 +355,7 @@ export async function DELETE(request, { params }) {
         deletedAt: new Date(),
         statusBeforeDeletion: existingPatient.status,
         status: "archived",
+        deletedById: sessionUser.id,
       },
     });
 

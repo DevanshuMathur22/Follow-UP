@@ -6,6 +6,7 @@ import Header from "./Header";
 import Sidebar from "./Sidebar";
 import useFollowUpReminders from "../../hooks/useFollowUpReminders";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../../services/clinicService";
+import { getCurrentUser } from "../../services/authService";
 
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
@@ -17,11 +18,34 @@ export default function DashboardLayout({ children }) {
   const reminders = useFollowUpReminders({ enabled: ready && remindersEnabled, clockInterval: 1_000 });
 
   useEffect(() => {
-    if (!window.localStorage.getItem("caretrack-token")) {
-      router.replace(`/?next=${encodeURIComponent(pathname)}`);
-      return;
+    let active = true;
+
+    async function verifySession() {
+      try {
+        const session = await getCurrentUser();
+
+        if (!active) return;
+
+        if (session.user) {
+          window.localStorage.setItem("caretrack-user", JSON.stringify(session.user));
+        }
+
+        setReady(true);
+      } catch {
+        window.localStorage.removeItem("caretrack-token");
+        window.localStorage.removeItem("caretrack-user");
+
+        if (active) {
+          router.replace(`/?next=${encodeURIComponent(pathname)}`);
+        }
+      }
     }
-    setReady(true);
+
+    void verifySession();
+
+    return () => {
+      active = false;
+    };
   }, [pathname, router]);
 
   useEffect(() => {

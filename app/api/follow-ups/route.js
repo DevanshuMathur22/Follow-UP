@@ -1,3 +1,4 @@
+import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 import { logActivity } from "../../../src/lib/activityLog";
 
@@ -37,6 +38,18 @@ async function syncPatientNextFollowUp(patientId) {
 
 export async function GET() {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const followUps = await prisma.followUp.findMany({
       include: {
         patient: true,
@@ -65,6 +78,18 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
 
     const patientId = body.patient || body.patientId;

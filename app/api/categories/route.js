@@ -1,7 +1,20 @@
+import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 
 export async function GET() {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const categories = await prisma.category.findMany({
       where: {
         active: true,
@@ -26,6 +39,18 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    const sessionUser = await getSessionUser();
+
+    if (!sessionUser) {
+      return Response.json(
+        {
+          success: false,
+          message: "Authentication required",
+        },
+        { status: 401 },
+      );
+    }
+
     const body = await request.json();
 
     const name = String(body.name || "").trim();

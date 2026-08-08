@@ -120,9 +120,13 @@ export default function Sidebar({ mobile = false, onNavigate }) {
         </div>
 
         <button
-          onClick={() => {
-            logoutUser();
-            router.replace("/");
+          onClick={async () => {
+            try {
+              await logoutUser();
+            } finally {
+              router.replace("/");
+              router.refresh();
+            }
           }}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600"
         >
