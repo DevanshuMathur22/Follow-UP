@@ -2,14 +2,8 @@
 
 import {
   Activity,
-  Archive,
-  BarChart3,
-  CalendarDays,
-  ClipboardList,
   FileText,
-  FileUp,
   LayoutDashboard,
-  ReceiptText,
   Settings,
   Stethoscope,
   Tags,
@@ -22,53 +16,21 @@ import { hasPermission, permissions } from "../../lib/permissions";
 
 const navigation = [
   {
-    title: "MAIN",
+    title: "CLINIC",
     items: [
       { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: "PATIENTS",
-    items: [
-      { name: "All Patients", path: "/patients", icon: Users },
-      {
-        name: "Archived Patients",
-        path: "/patients/archived",
-        icon: Archive,
-        permission: permissions.ARCHIVE_PATIENTS,
-      },
+      { name: "Patients", path: "/patients", icon: Users },
+      { name: "Follow-ups", path: "/follow-ups", icon: Activity },
       {
         name: "Categories",
         path: "/categories",
         icon: Tags,
         permission: permissions.MANAGE_CATEGORIES,
       },
-      { name: "Follow-ups", path: "/follow-ups", icon: Activity },
-      { name: "Tasks", path: "/tasks", icon: ClipboardList },
-      { name: "Appointments", path: "/appointments", icon: CalendarDays },
-    ],
-  },
-  {
-    title: "CLINIC",
-    items: [
-      { name: "Prescriptions", path: "/prescriptions", icon: ClipboardList },
-      { name: "Reports", path: "/reports", icon: FileUp },
-      { name: "Invoices", path: "/invoices", icon: ReceiptText },
-    ],
-  },
-  {
-    title: "SYSTEM",
-    items: [
       {
-        name: "Analytics",
-        path: "/analytics",
-        icon: BarChart3,
-        permission: permissions.VIEW_ANALYTICS,
-      },
-      {
-        name: "Activity Logs",
+        name: "Activity",
         path: "/activity",
-        icon: ClipboardList,
+        icon: FileText,
         permission: permissions.VIEW_ACTIVITY,
       },
       {
@@ -84,8 +46,15 @@ const navigation = [
 export default function Sidebar({ user, mobile = false, onNavigate }) {
   const pathname = usePathname();
   const router = useRouter();
+
   return (
-    <aside className={`${mobile ? "absolute inset-y-0 left-0 z-10 flex w-72 shadow-2xl" : "hidden min-h-screen w-72 lg:flex"} flex-col border-r border-slate-200 bg-white p-5`}>
+    <aside
+      className={`${
+        mobile
+          ? "absolute inset-y-0 left-0 z-10 flex w-72 shadow-2xl"
+          : "hidden min-h-screen w-72 lg:flex"
+      } flex-col border-r border-slate-200 bg-white p-5`}
+    >
       <div className="flex items-center gap-3 px-3 py-4">
         <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200">
           <Stethoscope size={22} />
@@ -99,46 +68,48 @@ export default function Sidebar({ user, mobile = false, onNavigate }) {
         </div>
       </div>
 
-      <nav className="mt-8 flex-1 space-y-6">
+      <nav className="mt-8 flex-1">
         {navigation.map((group) => {
           const items = group.items.filter(
             (item) =>
               !item.permission ||
-              hasPermission(user?.role, item.permission)
+              hasPermission(user?.role, item.permission),
           );
 
           if (!items.length) return null;
 
           return (
-          <div key={group.title}>
-            <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.16em] text-slate-400">
-              {group.title}
-            </p>
+            <div key={group.title}>
+              <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.16em] text-slate-400">
+                {group.title}
+              </p>
 
-            <div className="space-y-1">
-              {items.map((item) => {
-                const Icon = item.icon;
+              <div className="space-y-1">
+                {items.map((item) => {
+                  const Icon = item.icon;
+                  const active =
+                    pathname === item.path ||
+                    (item.path !== "/dashboard" &&
+                      pathname.startsWith(`${item.path}/`));
 
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.path}
-                    onClick={onNavigate}
-                    className={
-                      `flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
-                        pathname === item.path
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.path}
+                      onClick={onNavigate}
+                      className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition ${
+                        active
                           ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
                           : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                      }`
-                    }
-                  >
-                    <Icon size={19} />
-                    {item.name}
-                  </Link>
-                );
-              })}
+                      }`}
+                    >
+                      <Icon size={19} />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
           );
         })}
       </nav>
@@ -149,8 +120,8 @@ export default function Sidebar({ user, mobile = false, onNavigate }) {
             DR
           </div>
 
-          <div>
-            <p className="text-sm font-semibold text-slate-700">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-700">
               {user?.name || "Clinic Account"}
             </p>
             <p className="text-xs capitalize text-slate-500">
