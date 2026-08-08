@@ -315,44 +315,27 @@ function invoiceStatus(status) {
   return "Pending";
 }
 
+
 export async function getPatients() {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/patients")),
-    () => getStore().patients,
-  );
+  const result = unwrap(await api.get("/patients"));
   const items = Array.isArray(result) ? result : result?.patients || [];
   return items.map(normalizePatient);
 }
 
+
 export async function getPatient(patientId) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get(`/patients/${patientId}`)),
-    () => getStore().patients.find((patient) => getId(patient) === patientId),
-  );
+  const result = unwrap(await api.get(`/patients/${patientId}`));
   return result ? normalizePatient(result.patient || result) : null;
 }
 
+
 export async function createPatient(input) {
-  const payload = { ...input, age: Number(input.age) };
-  const result = await requestOrDemo(
-    async () => unwrap(await api.post("/patients", payload)),
-    () => {
-      const store = getStore();
-      const patient = {
-        ...payload,
-        id: makeId("PT", store.patients),
-        status: "Active",
-        lastVisit: new Date().toISOString().slice(0, 10),
-        nextFollowUp: "",
-        createdAt: new Date().toISOString(),
-      };
-      store.patients.unshift(patient);
-      const category = store.categories?.find((item) => item.name === patient.category && item.active);
-      if (category) syncDemoCategoryFollowUps(store, category.name, category.followUpIntervalDays);
-      saveStore(store);
-      return patient;
-    },
-  );
+  const payload = {
+    ...input,
+    age: input.age === "" || input.age === undefined ? undefined : Number(input.age),
+  };
+
+  const result = unwrap(await api.post("/patients", payload));
   return normalizePatient(result.patient || result);
 }
 
@@ -366,67 +349,32 @@ export async function updatePatient(patientId, input) {
   return normalizePatient(result.patient || result);
 }
 
+
 export async function archivePatient(patientId) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.delete(`/patients/${patientId}`)),
-    () => {
-      const store = getStore();
-      const patient = store.patients.find((item) => getId(item) === patientId);
-      if (!patient) throw new Error("Patient not found");
-
-      patient.statusBeforeDeletion = patient.status;
-      patient.status = "archived";
-      patient.isDeleted = true;
-      patient.deletedAt = new Date().toISOString();
-
-      saveStore(store);
-      return patient;
-    },
-  );
-
+  const result = unwrap(await api.delete(`/patients/${patientId}`));
   return normalizePatient(result.patient || result);
 }
 
-export async function getArchivedPatients() {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/patients/archived")),
-    () => getStore().patients.filter((patient) => patient.isDeleted),
-  );
 
+export async function getArchivedPatients() {
+  const result = unwrap(await api.get("/patients/archived"));
   const items = Array.isArray(result) ? result : result?.patients || [];
   return items.map(normalizePatient);
 }
 
+
 export async function restorePatient(patientId) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.patch(`/patients/${patientId}/restore`)),
-    () => {
-      const store = getStore();
-      const patient = store.patients.find((item) => getId(item) === patientId);
-
-      if (!patient) throw new Error("Patient not found");
-
-      patient.isDeleted = false;
-      patient.deletedAt = null;
-      patient.status = patient.statusBeforeDeletion || "active";
-      patient.statusBeforeDeletion = null;
-
-      saveStore(store);
-      return patient;
-    },
-  );
-
+  const result = unwrap(await api.patch(`/patients/${patientId}/restore`));
   return normalizePatient(result.patient || result);
 }
 
+
 export async function getCategories() {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/categories")),
-    () => getStore().categories || [],
-  );
+  const result = unwrap(await api.get("/categories"));
   const items = Array.isArray(result) ? result : result?.categories || [];
   return items.map(normalizeCategory);
 }
+
 
 export async function createCategory(input, { applyToPatients = true } = {}) {
   const payload = {
@@ -434,82 +382,53 @@ export async function createCategory(input, { applyToPatients = true } = {}) {
     followUpIntervalDays: Number(input.followUpIntervalDays),
     applyToPatients,
   };
-  const result = await requestOrDemo(
-    async () => {
-      const response = await api.post("/categories", payload);
-      return {
-        category: unwrap(response),
-        updatedPatients: response.data?.application?.processedPatients || 0,
-      };
-    },
-    () => {
-      const store = getStore();
-      if ((store.categories || []).some((item) => item.name.toLowerCase() === payload.name.trim().toLowerCase())) {
-        throw new Error("A category with this name already exists.");
-      }
-      const category = { ...payload, id: makeId("CAT", store.categories || []), active: true };
-      delete category.applyToPatients;
-      store.categories = [category, ...(store.categories || [])];
-      const updatedPatients = applyToPatients
-        ? syncDemoCategoryFollowUps(store, category.name, category.followUpIntervalDays)
-        : 0;
-      saveStore(store);
-      return { category, updatedPatients };
-    },
-  );
+
+  const response = await api.post("/categories", payload);
+  const data = unwrap(response);
+  const category = data?.category || data;
+
   return {
-    category: normalizeCategory(result.category || result),
-    updatedPatients: Number(result.updatedPatients || 0),
+    category: normalizeCategory(category),
+    updatedPatients: Number(
+      data?.application?.processedPatients ??
+      response.data?.application?.processedPatients ??
+      0
+    ),
   };
 }
+
 
 export async function updateCategory(categoryId, input, { applyToPatients = false } = {}) {
-  const payload = { ...input, followUpIntervalDays: Number(input.followUpIntervalDays), applyToPatients };
-  const result = await requestOrDemo(
-    async () => {
-      const response = await api.patch(`/categories/${categoryId}`, payload);
-      return {
-        category: unwrap(response),
-        updatedPatients: response.data?.application?.processedPatients || 0,
-      };
-    },
-    () => {
-      const store = getStore();
-      const index = (store.categories || []).findIndex((item) => getId(item) === categoryId);
-      if (index < 0) throw new Error("Category not found");
-      const current = store.categories[index];
-      const category = { ...current, ...payload };
-      delete category.applyToPatients;
-      store.categories[index] = category;
-      if (current.name !== category.name) {
-        store.patients.forEach((patient) => {
-          if (String(patient.category || "").toLowerCase() === String(current.name || "").toLowerCase()) {
-            patient.category = category.name;
-          }
-        });
-      }
-      const updatedPatients = applyToPatients
-        ? category.active
-          ? syncDemoCategoryFollowUps(store, category.name, category.followUpIntervalDays)
-          : clearDemoCategoryFollowUps(store, category.name)
-        : 0;
-      saveStore(store);
-      return { category, updatedPatients };
-    },
-  );
+  const payload = {
+    ...input,
+    followUpIntervalDays: Number(input.followUpIntervalDays),
+    applyToPatients,
+  };
+
+  const response = await api.patch(`/categories/${categoryId}`, payload);
+  const data = unwrap(response);
+  const category = data?.category || data;
+
   return {
-    category: normalizeCategory(result.category || result),
-    updatedPatients: result.updatedPatients || result.syncedPatients || 0,
+    category: normalizeCategory(category),
+    updatedPatients: Number(
+      data?.application?.processedPatients ??
+      data?.updatedPatients ??
+      data?.syncedPatients ??
+      response.data?.application?.processedPatients ??
+      0
+    ),
   };
 }
 
+
 export async function getFollowUps() {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/follow-ups")),
-    () => getStore().followUps,
-  );
+  const result = unwrap(await api.get("/follow-ups"));
   const items = Array.isArray(result) ? result : result?.followUps || [];
-  const patientMap = new Map((await getPatients()).map((patient) => [patient.id, patient]));
+  const patientMap = new Map(
+    (await getPatients()).map((patient) => [patient.id, patient])
+  );
+
   return items.map((item) => ({
     ...normalizeRelated(item, patientMap),
     status: getFollowUpStatus(item.status, item.dueDate || item.dueAt),
@@ -517,62 +436,49 @@ export async function getFollowUps() {
   }));
 }
 
+
 export async function createFollowUp(input) {
   const apiPayload = {
     ...input,
     patient: input.patientId,
-    dueDate: input.dueDate ? new Date(input.dueDate).toISOString() : input.dueDate,
+    dueDate: input.dueDate
+      ? new Date(input.dueDate).toISOString()
+      : input.dueDate,
   };
+
   delete apiPayload.patientId;
-  const result = await requestOrDemo(
-    async () => unwrap(await api.post("/follow-ups", apiPayload)),
-    () => {
-      const store = getStore();
-      const patient = store.patients.find((item) => getId(item) === input.patientId);
-      const record = {
-        ...input,
-        id: makeId("FU", store.followUps),
-        patientName: patient?.fullName,
-        mobile: patient?.mobile,
-        whatsapp: patient?.whatsapp,
-        city: patient?.city,
-        category: patient?.category,
-        lastVisit: patient?.lastVisit,
-        status: getFollowUpStatus("scheduled", input.dueDate),
-      };
-      store.followUps.unshift(record);
-      saveStore(store);
-      return record;
-    },
-  );
+
+  const result = unwrap(await api.post("/follow-ups", apiPayload));
   const followUp = result.followUp || result;
   const patient = followUp.patient;
+
   return {
     ...followUp,
     id: getId(followUp),
-    patientId: followUp.patientId || patient?._id || patient || input.patientId,
+    patientId:
+      followUp.patientId ||
+      patient?._id ||
+      patient ||
+      input.patientId,
     patientName: followUp.patientName || patient?.fullName,
     mobile: followUp.mobile || patient?.mobile,
     whatsapp: followUp.whatsapp || patient?.whatsapp,
     city: followUp.city || patient?.city,
     category: followUp.category || patient?.category,
     dueDate: followUp.dueDate || input.dueDate,
-    status: getFollowUpStatus(followUp.status, followUp.dueDate || input.dueDate),
+    status: getFollowUpStatus(
+      followUp.status,
+      followUp.dueDate || input.dueDate
+    ),
   };
 }
 
+
 export async function updateFollowUp(followUpId, updates) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.patch(`/follow-ups/${followUpId}`, updates)),
-    () => {
-      const store = getStore();
-      const index = store.followUps.findIndex((item) => getId(item) === followUpId);
-      if (index < 0) throw new Error("Follow-up not found");
-      store.followUps[index] = { ...store.followUps[index], ...updates };
-      saveStore(store);
-      return store.followUps[index];
-    },
+  const result = unwrap(
+    await api.patch(`/follow-ups/${followUpId}`, updates)
   );
+
   return result.followUp || result;
 }
 
@@ -955,11 +861,11 @@ export async function markAllNotificationsRead() {
 }
 
 export async function getActivityLogs(params = {}) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/activity-logs", { params })),
-    () => getStore().activities || [],
-  );
-  const items = Array.isArray(result) ? result : result?.activities || result?.activityLogs || [];
+  const result = unwrap(await api.get("/activity-logs", { params }));
+  const items = Array.isArray(result)
+    ? result
+    : result?.activities || result?.activityLogs || [];
+
   return items.map(normalizeActivity);
 }
 
