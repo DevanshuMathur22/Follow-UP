@@ -16,3 +16,21 @@ export function validMobile(value) {
   const digits = text.replace(/\D/g, "");
   return digits.length >= 7 && digits.length <= 15;
 }
+
+export function validEmail(value) {
+  if (typeof value !== "string") return false;
+
+  const email = value.trim();
+
+  if (!email || email.length > 254) return false;
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export function validPassword(value, minLength = 1) {
+  if (typeof value !== "string" || value.length < minLength) {
+    return false;
+  }
+
+  return new TextEncoder().encode(value).length <= 72;
+}

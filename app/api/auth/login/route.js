@@ -1,4 +1,9 @@
 import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
+import { readJsonBody } from "../../../../src/lib/requestBody";
+import {
+  validEmail,
+  validPassword,
+} from "../../../../src/lib/inputValidation";
 import bcrypt from "bcryptjs";
 import prisma from "../../../../src/lib/prisma";
 import { setSessionCookie } from "../../../../src/lib/auth";
@@ -14,15 +19,34 @@ export async function POST(request) {
   }
 
   try {
-    const body = await request.json();
-    const email = String(body.email || "").trim().toLowerCase();
-    const password = String(body.password || "");
+    const { data: body, error: bodyError } =
+      await readJsonBody(request, 8 * 1024);
 
-    if (!email || !password) {
+    if (bodyError) {
+      return bodyError;
+    }
+
+    if (
+      typeof body.email !== "string" ||
+      typeof body.password !== "string"
+    ) {
       return Response.json(
         {
           success: false,
           message: "Email and password are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const email = body.email.trim().toLowerCase();
+    const password = body.password;
+
+    if (!validEmail(email) || !validPassword(password)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid email or password",
         },
         { status: 400 },
       );
@@ -43,6 +67,7 @@ export async function POST(request) {
     }
 
     const now = new Date();
+
     const lockActive =
       user.lockedUntil &&
       new Date(user.lockedUntil).getTime() > now.getTime();
@@ -63,12 +88,12 @@ export async function POST(request) {
         ? 0
         : Number(user.failedLoginAttempts || 0);
 
-    const validPassword = await bcrypt.compare(
+    const validPasswordMatch = await bcrypt.compare(
       password,
       user.password,
     );
 
-    if (!validPassword) {
+    if (!validPasswordMatch) {
       const failedLoginAttempts = previousAttempts + 1;
       const shouldLock =
         failedLoginAttempts >= MAX_FAILED_ATTEMPTS;

@@ -1,4 +1,10 @@
 import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
+import { readJsonBody } from "../../../../src/lib/requestBody";
+import {
+  validEmail,
+  validPassword,
+  validText,
+} from "../../../../src/lib/inputValidation";
 import bcrypt from "bcryptjs";
 import prisma from "../../../../src/lib/prisma";
 import { setSessionCookie } from "../../../../src/lib/auth";
@@ -13,7 +19,10 @@ export async function GET() {
     });
   } catch {
     return Response.json(
-      { success: false, message: "Unable to check registration status" },
+      {
+        success: false,
+        message: "Unable to check registration status",
+      },
       { status: 500 },
     );
   }
@@ -31,21 +40,64 @@ export async function POST(request) {
 
     if (existingUsers > 0) {
       return Response.json(
-        { success: false, message: "Clinic account registration is disabled" },
+        {
+          success: false,
+          message: "Clinic account registration is disabled",
+        },
         { status: 403 },
       );
     }
 
-    const body = await request.json();
-    const name = String(body.name || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
-    const password = String(body.password || "");
+    const { data: body, error: bodyError } =
+      await readJsonBody(request, 8 * 1024);
 
-    if (!name || !email || password.length < 8) {
+    if (bodyError) {
+      return bodyError;
+    }
+
+    if (
+      typeof body.name !== "string" ||
+      typeof body.email !== "string" ||
+      typeof body.password !== "string"
+    ) {
       return Response.json(
         {
           success: false,
-          message: "Name, email and an 8 character password are required",
+          message: "Name, email and password are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const name = body.name.trim();
+    const email = body.email.trim().toLowerCase();
+    const password = body.password;
+
+    if (!name || !validText(name, 120)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid name",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!validEmail(email)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid email address",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!validPassword(password, 8)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Password must be between 8 and 72 bytes",
         },
         { status: 400 },
       );
@@ -86,7 +138,10 @@ export async function POST(request) {
     console.error("REGISTER ERROR:", error);
 
     return Response.json(
-      { success: false, message: "Unable to create clinic account" },
+      {
+        success: false,
+        message: "Unable to create clinic account",
+      },
       { status: 500 },
     );
   }

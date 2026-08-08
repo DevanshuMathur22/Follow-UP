@@ -1,4 +1,6 @@
 import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
+import { readJsonBody } from "../../../../src/lib/requestBody";
+import { validPassword } from "../../../../src/lib/inputValidation";
 import bcrypt from "bcryptjs";
 import prisma from "../../../../src/lib/prisma";
 import {
@@ -18,20 +20,45 @@ export async function PATCH(request) {
 
     if (!sessionUser) {
       return Response.json(
-        { success: false, message: "Authentication required" },
+        {
+          success: false,
+          message: "Authentication required",
+        },
         { status: 401 },
       );
     }
 
-    const body = await request.json();
-    const currentPassword = String(body.currentPassword || "");
-    const newPassword = String(body.newPassword || "");
+    const { data: body, error: bodyError } =
+      await readJsonBody(request, 8 * 1024);
 
-    if (!currentPassword || newPassword.length < 8) {
+    if (bodyError) {
+      return bodyError;
+    }
+
+    if (
+      typeof body.currentPassword !== "string" ||
+      typeof body.newPassword !== "string"
+    ) {
       return Response.json(
         {
           success: false,
-          message: "Current password and an 8 character new password are required",
+          message: "Current and new password are required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const currentPassword = body.currentPassword;
+    const newPassword = body.newPassword;
+
+    if (
+      !validPassword(currentPassword) ||
+      !validPassword(newPassword, 8)
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid password",
         },
         { status: 400 },
       );
@@ -43,19 +70,25 @@ export async function PATCH(request) {
 
     if (!user) {
       return Response.json(
-        { success: false, message: "User not found" },
+        {
+          success: false,
+          message: "User not found",
+        },
         { status: 404 },
       );
     }
 
-    const validPassword = await bcrypt.compare(
+    const validCurrentPassword = await bcrypt.compare(
       currentPassword,
       user.password,
     );
 
-    if (!validPassword) {
+    if (!validCurrentPassword) {
       return Response.json(
-        { success: false, message: "Current password is incorrect" },
+        {
+          success: false,
+          message: "Current password is incorrect",
+        },
         { status: 400 },
       );
     }
@@ -91,7 +124,10 @@ export async function PATCH(request) {
     console.error("PASSWORD CHANGE ERROR:", error);
 
     return Response.json(
-      { success: false, message: "Unable to update password" },
+      {
+        success: false,
+        message: "Unable to update password",
+      },
       { status: 500 },
     );
   }
