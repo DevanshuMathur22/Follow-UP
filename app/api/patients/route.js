@@ -186,6 +186,7 @@ export async function POST(request) {
     }
 
     await logActivity({
+      actor: sessionUser,
       module: "patient",
       action: "created",
       title: "Patient created",
@@ -230,6 +231,7 @@ export async function POST(request) {
       });
 
       await logActivity({
+      actor: sessionUser,
         module: "follow-up",
         action: "scheduled",
         title: "Automatic follow-up scheduled",

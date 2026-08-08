@@ -361,19 +361,8 @@ export async function updatePatient(patientId, input) {
     ...input,
     age: input.age === "" || input.age === undefined ? undefined : Number(input.age),
   };
-  const result = await requestOrDemo(
-    async () => unwrap(await api.patch(`/patients/${patientId}`, payload)),
-    () => {
-      const store = getStore();
-      const index = store.patients.findIndex((patient) => getId(patient) === patientId);
-      if (index < 0) throw new Error("Patient not found");
-      store.patients[index] = { ...store.patients[index], ...payload };
-      const category = store.categories?.find((item) => item.name === store.patients[index].category && item.active);
-      if (category) syncDemoCategoryFollowUps(store, category.name, category.followUpIntervalDays);
-      saveStore(store);
-      return store.patients[index];
-    },
-  );
+
+  const result = unwrap(await api.patch(`/patients/${patientId}`, payload));
   return normalizePatient(result.patient || result);
 }
 

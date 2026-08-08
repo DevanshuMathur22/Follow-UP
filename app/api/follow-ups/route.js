@@ -153,6 +153,7 @@ export async function POST(request) {
     await syncPatientNextFollowUp(patientId);
 
     await logActivity({
+      actor: sessionUser,
       module: "follow-up",
       action: "scheduled",
       title: "Follow-up scheduled",

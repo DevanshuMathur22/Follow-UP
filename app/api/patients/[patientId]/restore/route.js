@@ -63,6 +63,7 @@ export async function PATCH(request, { params }) {
     });
 
     await logActivity({
+      actor: sessionUser,
       module: "patient",
       action: "restored",
       title: "Patient restored",

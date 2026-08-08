@@ -285,6 +285,7 @@ export async function PATCH(request, { params }) {
     });
 
     await logActivity({
+      actor: sessionUser,
       module: "patient",
       action: categoryChanged ? "category_changed" : "updated",
       title: categoryChanged ? "Patient category changed" : "Patient updated",
@@ -360,6 +361,7 @@ export async function DELETE(request, { params }) {
     });
 
     await logActivity({
+      actor: sessionUser,
       module: "patient",
       action: "archived",
       title: "Patient archived",

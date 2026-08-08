@@ -258,6 +258,7 @@ export async function PATCH(request, { params }) {
     }
 
     await logActivity({
+      actor: sessionUser,
       module: "follow-up",
       action: activityAction,
       title: activityTitle,
@@ -269,6 +270,7 @@ export async function PATCH(request, { params }) {
 
     if (nextFollowUp) {
       await logActivity({
+      actor: sessionUser,
         module: "follow-up",
         action: "scheduled",
         title: "Next follow-up scheduled",

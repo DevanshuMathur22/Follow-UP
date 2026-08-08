@@ -8,6 +8,7 @@ export async function logActivity({
   patientId,
   recordId,
   relatedPath,
+  actor,
 }) {
   try {
     return await prisma.activityLog.create({
@@ -19,6 +20,9 @@ export async function logActivity({
         patientId: patientId || null,
         recordId: recordId || null,
         relatedPath: relatedPath || null,
+        actorId: actor?.id || null,
+        actorName: actor?.name || null,
+        actorRole: actor?.role || null,
       },
     });
   } catch (error) {

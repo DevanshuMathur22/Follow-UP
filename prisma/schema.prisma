@@ -138,10 +138,14 @@ model ActivityLog {
   patientId   String?  @db.ObjectId
   recordId    String?
   relatedPath String?
+  actorId     String?  @db.ObjectId
+  actorName   String?
+  actorRole   String?
   createdAt   DateTime @default(now())
 
   @@index([patientId, createdAt])
   @@index([module, createdAt])
+  @@index([actorId, createdAt])
   @@index([createdAt])
   @@map("activityLogs")
 }
