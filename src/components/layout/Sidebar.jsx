@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  FileCheck2,
   FileText,
   LayoutDashboard,
   Settings,
@@ -21,6 +22,12 @@ const navigation = [
       { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
       { name: "Patients", path: "/patients", icon: Users },
       { name: "Follow-ups", path: "/follow-ups", icon: Activity },
+      {
+        name: "Certificates",
+        path: "/certificates",
+        icon: FileCheck2,
+        permission: permissions.MANAGE_CERTIFICATES,
+      },
       {
         name: "Categories",
         path: "/categories",

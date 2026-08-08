@@ -5,6 +5,7 @@ export const permissions = {
   MANAGE_CATEGORIES: "manage_categories",
   MANAGE_FOLLOW_UPS: "manage_follow_ups",
   MANAGE_PRESCRIPTIONS: "manage_prescriptions",
+  MANAGE_CERTIFICATES: "manage_certificates",
   VIEW_ACTIVITY: "view_activity",
   VIEW_ANALYTICS: "view_analytics",
   MANAGE_SETTINGS: "manage_settings",
@@ -18,6 +19,7 @@ const rolePermissions = {
     permissions.EDIT_PATIENTS,
     permissions.MANAGE_FOLLOW_UPS,
     permissions.MANAGE_PRESCRIPTIONS,
+    permissions.MANAGE_CERTIFICATES,
   ]),
 };
 

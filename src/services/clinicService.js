@@ -610,6 +610,80 @@ export async function downloadPrescription(prescription) {
   URL.revokeObjectURL(fileUrl);
 }
 
+export async function getCertificateTemplates(includeInactive = false) {
+  const result = unwrap(
+    await api.get("/certificate-templates", {
+      params: includeInactive ? { all: 1 } : {},
+    }),
+  );
+
+  const items = Array.isArray(result)
+    ? result
+    : result?.templates || [];
+
+  return items.map((item) => ({
+    ...item,
+    id: getId(item),
+  }));
+}
+
+export async function createCertificateTemplate(input) {
+  const result = unwrap(
+    await api.post("/certificate-templates", input),
+  );
+
+  return result?.template || result;
+}
+
+export async function updateCertificateTemplate(id, input) {
+  const result = unwrap(
+    await api.patch(`/certificate-templates/${id}`, input),
+  );
+
+  return result?.template || result;
+}
+
+export async function getCertificates(patientId) {
+  const result = unwrap(
+    await api.get("/certificates", {
+      params: patientId ? { patient: patientId } : {},
+    }),
+  );
+
+  const items = Array.isArray(result)
+    ? result
+    : result?.certificates || [];
+
+  return items.map((item) => ({
+    ...item,
+    id: getId(item),
+    patientId:
+      item.patientId ||
+      item.patient?.id ||
+      item.patient?._id ||
+      item.patient,
+  }));
+}
+
+export async function createCertificate(input) {
+  const result = unwrap(
+    await api.post("/certificates", input),
+  );
+
+  const certificate =
+    result?.certificate || result;
+
+  return {
+    ...certificate,
+    id: getId(certificate),
+    patientId:
+      certificate.patientId ||
+      certificate.patient?.id ||
+      certificate.patient?._id ||
+      input.patientId,
+  };
+}
+
 export async function createReport(input) {
   const formData = new FormData();
   Object.entries(input).forEach(([key, value]) => {
