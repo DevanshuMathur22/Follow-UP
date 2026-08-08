@@ -1,3 +1,4 @@
+import { validateWriteOrigin } from "../../../../../src/lib/requestSecurity";
 import { forbiddenResponse, hasPermission, permissions } from "../../../../../src/lib/permissions";
 import { getSessionUser } from "../../../../../src/lib/auth";
 import prisma from "../../../../../src/lib/prisma";
@@ -8,6 +9,12 @@ function validObjectId(value) {
 }
 
 export async function PATCH(request, { params }) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const sessionUser = await getSessionUser();
 

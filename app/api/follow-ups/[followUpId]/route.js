@@ -1,3 +1,4 @@
+import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 import { logActivity } from "../../../../src/lib/activityLog";
@@ -41,6 +42,12 @@ async function syncPatientNextFollowUp(patientId) {
 }
 
 export async function PATCH(request, { params }) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const sessionUser = await getSessionUser();
 

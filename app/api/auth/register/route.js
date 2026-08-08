@@ -1,3 +1,4 @@
+import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
 import bcrypt from "bcryptjs";
 import prisma from "../../../../src/lib/prisma";
 import { setSessionCookie } from "../../../../src/lib/auth";
@@ -19,6 +20,12 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const existingUsers = await prisma.user.count();
 

@@ -1,3 +1,4 @@
+import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
 import bcrypt from "bcryptjs";
 import prisma from "../../../../src/lib/prisma";
 import { setSessionCookie } from "../../../../src/lib/auth";
@@ -6,6 +7,12 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
 
 export async function POST(request) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const body = await request.json();
     const email = String(body.email || "").trim().toLowerCase();

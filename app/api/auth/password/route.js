@@ -1,3 +1,4 @@
+import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
 import bcrypt from "bcryptjs";
 import prisma from "../../../../src/lib/prisma";
 import {
@@ -6,6 +7,12 @@ import {
 } from "../../../../src/lib/auth";
 
 export async function PATCH(request) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const sessionUser = await getSessionUser();
 

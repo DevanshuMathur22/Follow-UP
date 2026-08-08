@@ -1,3 +1,4 @@
+import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 import { logActivity } from "../../../src/lib/activityLog";
@@ -77,6 +78,12 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const sessionUser = await getSessionUser();
 

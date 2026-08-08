@@ -1,10 +1,17 @@
+import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
 import prisma from "../../../../src/lib/prisma";
 import {
   clearSessionCookie,
   getSessionUser,
 } from "../../../../src/lib/auth";
 
-export async function POST() {
+export async function POST(request) {
+  const originError = validateWriteOrigin(request);
+
+  if (originError) {
+    return originError;
+  }
+
   try {
     const sessionUser = await getSessionUser();
 
