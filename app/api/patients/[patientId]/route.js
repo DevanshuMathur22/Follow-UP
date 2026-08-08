@@ -1,4 +1,5 @@
 import prisma from "../../../../src/lib/prisma";
+import { logActivity } from "../../../../src/lib/activityLog";
 
 const genders = ["Female", "Male", "Other", "Prefer_not_to_say"];
 
@@ -241,6 +242,18 @@ export async function PATCH(request, { params }) {
       },
     });
 
+    await logActivity({
+      module: "patient",
+      action: categoryChanged ? "category_changed" : "updated",
+      title: categoryChanged ? "Patient category changed" : "Patient updated",
+      description: categoryChanged
+        ? `${patient.fullName} · ${existingPatient.category} → ${patient.category}`
+        : patient.fullName,
+      patientId: patient.id,
+      recordId: patient.id,
+      relatedPath: `/patients/${patient.id}`,
+    });
+
     return Response.json({
       success: true,
       patient,
@@ -289,6 +302,16 @@ export async function DELETE(request, { params }) {
         statusBeforeDeletion: existingPatient.status,
         status: "archived",
       },
+    });
+
+    await logActivity({
+      module: "patient",
+      action: "archived",
+      title: "Patient archived",
+      description: `${patient.fullName} · ${patient.patientCode}`,
+      patientId: patient.id,
+      recordId: patient.id,
+      relatedPath: `/patients/archived`,
     });
 
     return Response.json({

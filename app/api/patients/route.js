@@ -1,4 +1,5 @@
 import prisma from "../../../src/lib/prisma";
+import { logActivity } from "../../../src/lib/activityLog";
 
 const genders = ["Female", "Male", "Other", "Prefer_not_to_say"];
 
@@ -158,6 +159,16 @@ export async function POST(request) {
       );
     }
 
+    await logActivity({
+      module: "patient",
+      action: "created",
+      title: "Patient created",
+      description: `${patient.fullName} · ${patient.patientCode}`,
+      patientId: patient.id,
+      recordId: patient.id,
+      relatedPath: `/patients/${patient.id}`,
+    });
+
     const category = await prisma.category.findUnique({
       where: {
         name: patient.category,
@@ -180,7 +191,7 @@ export async function POST(request) {
         },
       });
 
-      await prisma.followUp.create({
+      const autoFollowUp = await prisma.followUp.create({
         data: {
           patientId: patient.id,
           dueDate: nextFollowUp,
@@ -190,6 +201,16 @@ export async function POST(request) {
           source: "category",
           notes: "Auto generated follow-up",
         },
+      });
+
+      await logActivity({
+        module: "follow-up",
+        action: "scheduled",
+        title: "Automatic follow-up scheduled",
+        description: `${patient.fullName} · ${patient.category}`,
+        patientId: patient.id,
+        recordId: autoFollowUp.id,
+        relatedPath: `/patients/${patient.id}`,
       });
 
       patient = await prisma.patient.findUnique({

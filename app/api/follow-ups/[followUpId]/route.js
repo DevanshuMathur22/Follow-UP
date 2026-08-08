@@ -1,4 +1,5 @@
 import prisma from "../../../../src/lib/prisma";
+import { logActivity } from "../../../../src/lib/activityLog";
 
 const statuses = ["Scheduled", "Completed", "Cancelled"];
 const priorities = ["low", "medium", "high"];
@@ -228,6 +229,42 @@ export async function PATCH(request, { params }) {
     }
 
     await syncPatientNextFollowUp(existing.patientId);
+
+    let activityAction = "updated";
+    let activityTitle = "Follow-up updated";
+
+    if (updates.status === "Completed") {
+      activityAction = "completed";
+      activityTitle = "Follow-up completed";
+    } else if (updates.status === "Cancelled") {
+      activityAction = "cancelled";
+      activityTitle = "Follow-up cancelled";
+    } else if (body.dueDate !== undefined) {
+      activityAction = "rescheduled";
+      activityTitle = "Follow-up rescheduled";
+    }
+
+    await logActivity({
+      module: "follow-up",
+      action: activityAction,
+      title: activityTitle,
+      description: `${followUp.patient?.fullName || "Patient"} · ${followUp.type}`,
+      patientId: existing.patientId,
+      recordId: followUp.id,
+      relatedPath: `/patients/${existing.patientId}`,
+    });
+
+    if (nextFollowUp) {
+      await logActivity({
+        module: "follow-up",
+        action: "scheduled",
+        title: "Next follow-up scheduled",
+        description: `${nextFollowUp.patient?.fullName || "Patient"} · ${nextFollowUp.type}`,
+        patientId: existing.patientId,
+        recordId: nextFollowUp.id,
+        relatedPath: `/patients/${existing.patientId}`,
+      });
+    }
 
     return Response.json({
       success: true,

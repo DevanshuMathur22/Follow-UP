@@ -1,4 +1,5 @@
 import prisma from "../../../src/lib/prisma";
+import { logActivity } from "../../../src/lib/activityLog";
 
 function validObjectId(value) {
   return /^[a-f\d]{24}$/i.test(String(value || ""));
@@ -125,6 +126,16 @@ export async function POST(request) {
     });
 
     await syncPatientNextFollowUp(patientId);
+
+    await logActivity({
+      module: "follow-up",
+      action: "scheduled",
+      title: "Follow-up scheduled",
+      description: `${followUp.patient?.fullName || "Patient"} · ${followUp.type}`,
+      patientId,
+      recordId: followUp.id,
+      relatedPath: `/patients/${patientId}`,
+    });
 
     return Response.json(
       {

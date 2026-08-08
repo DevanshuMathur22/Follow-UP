@@ -128,3 +128,20 @@ model FollowUp {
   @@index([priority])
   @@map("followUps")
 }
+
+model ActivityLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  module      String
+  action      String
+  title       String
+  description String?
+  patientId   String?  @db.ObjectId
+  recordId    String?
+  relatedPath String?
+  createdAt   DateTime @default(now())
+
+  @@index([patientId, createdAt])
+  @@index([module, createdAt])
+  @@index([createdAt])
+  @@map("activityLogs")
+}

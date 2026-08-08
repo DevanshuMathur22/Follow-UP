@@ -1,4 +1,5 @@
 import prisma from "../../../../../src/lib/prisma";
+import { logActivity } from "../../../../../src/lib/activityLog";
 
 function validObjectId(value) {
   return /^[a-f\d]{24}$/i.test(String(value || ""));
@@ -46,6 +47,16 @@ export async function PATCH(request, { params }) {
         status: patient.statusBeforeDeletion || "active",
         statusBeforeDeletion: null,
       },
+    });
+
+    await logActivity({
+      module: "patient",
+      action: "restored",
+      title: "Patient restored",
+      description: `${restoredPatient.fullName} · ${restoredPatient.patientCode}`,
+      patientId: restoredPatient.id,
+      recordId: restoredPatient.id,
+      relatedPath: `/patients/${restoredPatient.id}`,
     });
 
     return Response.json({
