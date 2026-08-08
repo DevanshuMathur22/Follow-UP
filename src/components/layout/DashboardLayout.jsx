@@ -12,6 +12,7 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [sessionUser, setSessionUser] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [notifications, setNotifications] = useState([]);
@@ -27,6 +28,7 @@ export default function DashboardLayout({ children }) {
         if (!active) return;
 
         if (session.user) {
+          setSessionUser(session.user);
           window.localStorage.setItem("caretrack-user", JSON.stringify(session.user));
         }
 
@@ -113,7 +115,7 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-slate-50 lg:flex">
-      <Sidebar />
+      <Sidebar user={sessionUser} />
 
       {mobileNavOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -122,7 +124,11 @@ export default function DashboardLayout({ children }) {
             onClick={() => setMobileNavOpen(false)}
             className="absolute inset-0 bg-slate-900/30"
           />
-          <Sidebar mobile onNavigate={() => setMobileNavOpen(false)} />
+          <Sidebar
+            user={sessionUser}
+            mobile
+            onNavigate={() => setMobileNavOpen(false)}
+          />
         </div>
       )}
 

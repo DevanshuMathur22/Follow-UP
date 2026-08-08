@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logoutUser } from "../../services/authService";
+import { hasPermission, permissions } from "../../lib/permissions";
 
 const navigation = [
   {
@@ -30,8 +31,18 @@ const navigation = [
     title: "PATIENTS",
     items: [
       { name: "All Patients", path: "/patients", icon: Users },
-      { name: "Archived Patients", path: "/patients/archived", icon: Archive },
-      { name: "Categories", path: "/categories", icon: Tags },
+      {
+        name: "Archived Patients",
+        path: "/patients/archived",
+        icon: Archive,
+        permission: permissions.ARCHIVE_PATIENTS,
+      },
+      {
+        name: "Categories",
+        path: "/categories",
+        icon: Tags,
+        permission: permissions.MANAGE_CATEGORIES,
+      },
       { name: "Follow-ups", path: "/follow-ups", icon: Activity },
       { name: "Tasks", path: "/tasks", icon: ClipboardList },
       { name: "Appointments", path: "/appointments", icon: CalendarDays },
@@ -48,14 +59,29 @@ const navigation = [
   {
     title: "SYSTEM",
     items: [
-      { name: "Analytics", path: "/analytics", icon: BarChart3 },
-      { name: "Activity Logs", path: "/activity", icon: ClipboardList },
-      { name: "Settings", path: "/settings", icon: Settings },
+      {
+        name: "Analytics",
+        path: "/analytics",
+        icon: BarChart3,
+        permission: permissions.VIEW_ANALYTICS,
+      },
+      {
+        name: "Activity Logs",
+        path: "/activity",
+        icon: ClipboardList,
+        permission: permissions.VIEW_ACTIVITY,
+      },
+      {
+        name: "Settings",
+        path: "/settings",
+        icon: Settings,
+        permission: permissions.MANAGE_SETTINGS,
+      },
     ],
   },
 ];
 
-export default function Sidebar({ mobile = false, onNavigate }) {
+export default function Sidebar({ user, mobile = false, onNavigate }) {
   const pathname = usePathname();
   const router = useRouter();
   return (
@@ -74,14 +100,23 @@ export default function Sidebar({ mobile = false, onNavigate }) {
       </div>
 
       <nav className="mt-8 flex-1 space-y-6">
-        {navigation.map((group) => (
+        {navigation.map((group) => {
+          const items = group.items.filter(
+            (item) =>
+              !item.permission ||
+              hasPermission(user?.role, item.permission)
+          );
+
+          if (!items.length) return null;
+
+          return (
           <div key={group.title}>
             <p className="mb-2 px-3 text-[11px] font-semibold tracking-[0.16em] text-slate-400">
               {group.title}
             </p>
 
             <div className="space-y-1">
-              {group.items.map((item) => {
+              {items.map((item) => {
                 const Icon = item.icon;
 
                 return (
@@ -104,7 +139,8 @@ export default function Sidebar({ mobile = false, onNavigate }) {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -114,8 +150,12 @@ export default function Sidebar({ mobile = false, onNavigate }) {
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-slate-700">Clinic Account</p>
-            <p className="text-xs text-slate-500">Secure workspace</p>
+            <p className="text-sm font-semibold text-slate-700">
+              {user?.name || "Clinic Account"}
+            </p>
+            <p className="text-xs capitalize text-slate-500">
+              {user?.role || "Secure workspace"}
+            </p>
           </div>
         </div>
 

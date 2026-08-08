@@ -1,3 +1,4 @@
+import { forbiddenResponse, hasPermission, permissions } from "../../../../src/lib/permissions";
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 
@@ -13,6 +14,10 @@ export async function GET() {
         },
         { status: 401 },
       );
+    }
+
+    if (!hasPermission(sessionUser.role, permissions.ARCHIVE_PATIENTS)) {
+      return forbiddenResponse();
     }
 
     const patients = await prisma.patient.findMany({

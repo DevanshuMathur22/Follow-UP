@@ -1,3 +1,4 @@
+import { forbiddenResponse, hasPermission, permissions } from "../../../src/lib/permissions";
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 
@@ -17,6 +18,10 @@ export async function GET(request) {
         },
         { status: 401 },
       );
+    }
+
+    if (!hasPermission(sessionUser.role, permissions.VIEW_ACTIVITY)) {
+      return forbiddenResponse();
     }
 
     const { searchParams } = new URL(request.url);

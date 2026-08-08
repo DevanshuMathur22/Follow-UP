@@ -1,3 +1,4 @@
+import { forbiddenResponse, hasPermission, permissions } from "../../../../src/lib/permissions";
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 
@@ -87,6 +88,10 @@ export async function PATCH(request, { params }) {
         },
         { status: 401 },
       );
+    }
+
+    if (!hasPermission(sessionUser.role, permissions.MANAGE_CATEGORIES)) {
+      return forbiddenResponse();
     }
 
     const { categoryId } = await params;
