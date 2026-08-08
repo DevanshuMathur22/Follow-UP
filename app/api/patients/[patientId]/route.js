@@ -34,6 +34,16 @@ function buildUpdates(data) {
   return updates;
 }
 
+function sameValue(current, next) {
+  if (current instanceof Date || next instanceof Date) {
+    const currentTime = current ? new Date(current).getTime() : null;
+    const nextTime = next ? new Date(next).getTime() : null;
+    return currentTime === nextTime;
+  }
+
+  return current === next;
+}
+
 function validateUpdates(data) {
   if ("fullName" in data && !data.fullName) return "Full name is required";
   if ("mobile" in data && !data.mobile) return "Mobile number is required";
@@ -118,10 +128,6 @@ export async function PATCH(request, { params }) {
         id: patientId,
         isDeleted: false,
       },
-      select: {
-        id: true,
-        category: true,
-      },
     });
 
     if (!existingPatient) {
@@ -163,6 +169,17 @@ export async function PATCH(request, { params }) {
       }
 
       updates.category = selectedCategory.name;
+    }
+
+    const changedFields = Object.keys(updates).filter(
+      (field) => !sameValue(existingPatient[field], updates[field])
+    );
+
+    if (!changedFields.length) {
+      return Response.json({
+        success: true,
+        patient: existingPatient,
+      });
     }
 
     await prisma.patient.update({
