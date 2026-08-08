@@ -77,7 +77,8 @@ model Patient {
   createdBy User? @relation("PatientCreatedBy", fields: [createdById], references: [id])
   deletedBy User? @relation("PatientDeletedBy", fields: [deletedById], references: [id])
 
-  followUps FollowUp[]
+  followUps     FollowUp[]
+  prescriptions Prescription[]
 
   @@index([fullName])
   @@index([mobile])
@@ -130,6 +131,34 @@ model FollowUp {
   @@index([status])
   @@index([priority])
   @@map("followUps")
+}
+
+model Prescription {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  patientId String  @db.ObjectId
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  issuedAt   DateTime
+  doctorName String?
+  diagnosis  String?
+  notes      String?
+
+  attachmentName     String
+  attachmentType     String
+  attachmentSize     Int
+  attachmentUrl      String
+  attachmentPathname String
+
+  createdById String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([issuedAt])
+  @@index([createdAt])
+  @@map("prescriptions")
 }
 
 model ActivityLog {

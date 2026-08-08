@@ -1,6 +1,7 @@
 import {
   Activity,
   CalendarDays,
+  FileText,
   History,
   UserRound,
 } from "lucide-react";
@@ -16,9 +17,11 @@ import {
   updateFollowUp,
 } from "../../services/clinicService";
 import PatientTimeline from "./PatientTimeline";
+import PatientPrescriptions from "./PatientPrescriptions";
 
 const tabs = [
   { name: "Overview", icon: UserRound },
+  { name: "Prescriptions", icon: FileText },
   { name: "Follow-ups", icon: Activity },
   { name: "Timeline", icon: History },
 ];
@@ -147,6 +150,7 @@ function RecordHeader({
 export default function PatientProfileTabs({
   patient,
   followUps = [],
+  prescriptions = [],
   activities = [],
   onRefresh,
 }) {
@@ -570,6 +574,14 @@ export default function PatientProfileTabs({
               </div>
             </aside>
           </div>
+        )}
+
+        {activeTab === "Prescriptions" && (
+          <PatientPrescriptions
+            patient={patient}
+            prescriptions={prescriptions}
+            onRefresh={onRefresh}
+          />
         )}
 
         {activeTab === "Follow-ups" && (

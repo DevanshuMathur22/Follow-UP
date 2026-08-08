@@ -19,6 +19,7 @@ import {
   getCategories,
   getFollowUps,
   getPatient,
+  getPrescriptions,
   updatePatient,
 } from "../services/clinicService";
 import {
@@ -32,6 +33,7 @@ export default function PatientProfile() {
   const [patient, setPatient] = useState(null);
   const [related, setRelated] = useState({
     followUps: [],
+    prescriptions: [],
     activities: [],
   });
   const [categories, setCategories] = useState([]);
@@ -60,6 +62,7 @@ export default function PatientProfile() {
 
       const results = await Promise.allSettled([
         getFollowUps(),
+        getPrescriptions(patientId),
         getCategories(),
         getActivityLogs({
           patient: patientId,
@@ -69,6 +72,7 @@ export default function PatientProfile() {
 
       const [
         followUpsResult,
+        prescriptionsResult,
         categoriesResult,
         activitiesResult,
       ] = results;
@@ -94,6 +98,7 @@ export default function PatientProfile() {
           resultValue(followUpsResult).filter(
             matchingPatient,
           ),
+        prescriptions: resultValue(prescriptionsResult),
         activities: resultValue(activitiesResult),
       });
 
@@ -296,6 +301,7 @@ export default function PatientProfile() {
             <PatientProfileTabs
               patient={patient}
               followUps={related.followUps}
+              prescriptions={related.prescriptions}
               activities={related.activities}
               onRefresh={loadProfile}
             />

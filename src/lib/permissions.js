@@ -4,6 +4,7 @@ export const permissions = {
   ARCHIVE_PATIENTS: "archive_patients",
   MANAGE_CATEGORIES: "manage_categories",
   MANAGE_FOLLOW_UPS: "manage_follow_ups",
+  MANAGE_PRESCRIPTIONS: "manage_prescriptions",
   VIEW_ACTIVITY: "view_activity",
   VIEW_ANALYTICS: "view_analytics",
   MANAGE_SETTINGS: "manage_settings",
@@ -16,6 +17,7 @@ const rolePermissions = {
     permissions.VIEW_PATIENTS,
     permissions.EDIT_PATIENTS,
     permissions.MANAGE_FOLLOW_UPS,
+    permissions.MANAGE_PRESCRIPTIONS,
   ]),
 };
 

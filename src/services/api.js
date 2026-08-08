@@ -9,7 +9,6 @@ const api = axios.create({
 
 const localOnlyModules = [
   "/appointments",
-  "/prescriptions",
   "/reports",
   "/invoices",
   "/payments",
