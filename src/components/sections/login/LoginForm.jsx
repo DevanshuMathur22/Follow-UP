@@ -9,7 +9,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 
-export default function LoginForm({ onSubmit, loading, mode, onModeChange }) {
+export default function LoginForm({ onSubmit, loading, mode, onModeChange, registrationAllowed = false }) {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -183,14 +183,24 @@ export default function LoginForm({ onSubmit, loading, mode, onModeChange }) {
               </button>
             </form>
 
-            <button type="button" onClick={() => onModeChange?.(mode === "login" ? "register" : "login")} className="mt-4 w-full text-sm font-semibold text-indigo-600 hover:text-indigo-700">
-              {mode === "login" ? "Set up a new clinic account" : "Already have an account? Sign in"}
-            </button>
+            {(mode === "register" || registrationAllowed) && (
+              <button
+                type="button"
+                onClick={() =>
+                  onModeChange?.(mode === "login" ? "register" : "login")
+                }
+                className="mt-4 w-full text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+              >
+                {mode === "login"
+                  ? "Set up a new clinic account"
+                  : "Already have an account? Sign in"}
+              </button>
+            )}
 
             <p className="mt-8 text-center text-xs leading-5 text-slate-400">
               {mode === "login"
                 ? "Authorized clinic access only."
-                : "Only the first clinic account can be registered."}
+                : "Create the first authorized clinic account."}
             </p>
           </div>
         </motion.div>

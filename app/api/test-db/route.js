@@ -2,6 +2,16 @@ import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return Response.json(
+      {
+        success: false,
+        message: "Not found",
+      },
+      { status: 404 },
+    );
+  }
+
   try {
     const sessionUser = await getSessionUser();
 
