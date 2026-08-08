@@ -61,6 +61,7 @@ export async function POST(request) {
         email: true,
         role: true,
         active: true,
+        sessionVersion: true,
         lastLoginAt: true,
       },
     });

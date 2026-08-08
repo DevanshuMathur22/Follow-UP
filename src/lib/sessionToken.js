@@ -23,6 +23,7 @@ export function createSessionToken(user) {
       sub: user.id,
       email: user.email,
       role: user.role,
+      sessionVersion: Number(user.sessionVersion),
     },
     jwtSecret(),
     {
@@ -41,7 +42,9 @@ export function verifySessionToken(token) {
     if (
       !payload ||
       typeof payload !== "object" ||
-      !validObjectId(payload.sub)
+      !validObjectId(payload.sub) ||
+      !Number.isInteger(payload.sessionVersion) ||
+      payload.sessionVersion < 0
     ) {
       return null;
     }

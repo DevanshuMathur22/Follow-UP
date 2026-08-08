@@ -49,7 +49,7 @@ export async function getSessionUser() {
 
   if (!payload) return null;
 
-  return prisma.user.findFirst({
+  const user = await prisma.user.findFirst({
     where: {
       id: payload.sub,
       active: true,
@@ -60,7 +60,17 @@ export async function getSessionUser() {
       email: true,
       role: true,
       active: true,
+      sessionVersion: true,
       lastLoginAt: true,
     },
   });
+
+  if (
+    !user ||
+    user.sessionVersion !== payload.sessionVersion
+  ) {
+    return null;
+  }
+
+  return user;
 }

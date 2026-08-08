@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import prisma from "./src/lib/prisma";
 import {
   SESSION_COOKIE,
   verifySessionToken,
@@ -31,34 +32,84 @@ const restrictedRoutes = [
   },
 ];
 
-export function proxy(request) {
+function loginRedirect(request) {
   const { pathname, search } = request.nextUrl;
+  const loginUrl = new URL("/", request.url);
+  loginUrl.searchParams.set("next", `${pathname}${search}`);
+  return NextResponse.redirect(loginUrl);
+}
+
+async function validateSession(token) {
+  const payload = verifySessionToken(token);
+
+  if (!payload) return null;
+
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        id: payload.sub,
+        active: true,
+      },
+      select: {
+        id: true,
+        role: true,
+        sessionVersion: true,
+      },
+    });
+
+    if (
+      !user ||
+      user.sessionVersion !== payload.sessionVersion
+    ) {
+      return null;
+    }
+
+    return user;
+  } catch (error) {
+    console.error("PROXY SESSION ERROR:", error);
+    return null;
+  }
+}
+
+export async function proxy(request) {
+  const { pathname } = request.nextUrl;
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const session = token ? verifySessionToken(token) : null;
+
+  if (pathname === "/" && !token) {
+    return NextResponse.next();
+  }
+
+  const session = token
+    ? await validateSession(token)
+    : null;
 
   if (pathname === "/") {
     if (session) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      return NextResponse.redirect(
+        new URL("/dashboard", request.url)
+      );
     }
 
     return NextResponse.next();
   }
 
   if (!session) {
-    const loginUrl = new URL("/", request.url);
-    loginUrl.searchParams.set("next", `${pathname}${search}`);
-    return NextResponse.redirect(loginUrl);
+    return loginRedirect(request);
   }
 
   const restricted = restrictedRoutes.find(
-    ({ path }) => pathname === path || pathname.startsWith(`${path}/`)
+    ({ path }) =>
+      pathname === path ||
+      pathname.startsWith(`${path}/`)
   );
 
   if (
     restricted &&
     !hasPermission(session.role, restricted.permission)
   ) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(
+      new URL("/dashboard", request.url)
+    );
   }
 
   return NextResponse.next();
