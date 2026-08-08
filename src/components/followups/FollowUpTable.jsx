@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -12,14 +11,12 @@ import {
   PhoneCall,
   RotateCcw,
   Search,
-  SlidersHorizontal,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, initials } from "../../lib/format";
 
 const PAGE_SIZE = 8;
-const statusOptions = ["All", "Today", "Upcoming", "Overdue", "Completed", "Cancelled"];
 
 function contactDigits(value) {
   return String(value || "").replace(/\D/g, "");
@@ -110,7 +107,6 @@ export default function FollowUpTable({
   actionLoadingId,
 }) {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
   const [dateFilter, setDateFilter] = useState("All dates");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [priorityFilter, setPriorityFilter] = useState("All");
@@ -123,14 +119,13 @@ export default function FollowUpTable({
 
   useEffect(() => {
     setPage(1);
-  }, [activeTab, query, statusFilter, dateFilter, categoryFilter, priorityFilter]);
+  }, [activeTab, query, dateFilter, categoryFilter, priorityFilter]);
 
   const visibleFollowUps = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return followUps
       .filter((followUp) => {
         const matchesQueue = activeTab === "All" || followUp.status === activeTab;
-        const matchesStatus = statusFilter === "All" || followUp.status === statusFilter;
         const matchesDate = matchesDateRange(followUp, dateFilter);
         const matchesCategory = categoryFilter === "All" || followUp.category === categoryFilter;
         const matchesPriority = priorityFilter === "All" || String(followUp.priority || "medium").toLowerCase() === priorityFilter.toLowerCase();
@@ -143,10 +138,10 @@ export default function FollowUpTable({
           followUp.id,
         ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery));
 
-        return matchesQueue && matchesStatus && matchesDate && matchesCategory && matchesPriority && matchesQuery;
+        return matchesQueue && matchesDate && matchesCategory && matchesPriority && matchesQuery;
       })
       .sort((first, second) => dueSortValue(first) - dueSortValue(second));
-  }, [activeTab, followUps, query, statusFilter, dateFilter, categoryFilter, priorityFilter]);
+  }, [activeTab, followUps, query, dateFilter, categoryFilter, priorityFilter]);
 
   const pageCount = Math.max(1, Math.ceil(visibleFollowUps.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -156,23 +151,17 @@ export default function FollowUpTable({
   );
   const showingFrom = visibleFollowUps.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0;
   const showingTo = Math.min(currentPage * PAGE_SIZE, visibleFollowUps.length);
-  const hasFilters = query || statusFilter !== "All" || dateFilter !== "All dates" || categoryFilter !== "All" || priorityFilter !== "All";
+  const hasFilters = query || dateFilter !== "All dates" || categoryFilter !== "All" || priorityFilter !== "All";
 
   function clearFilters() {
     setQuery("");
-    setStatusFilter("All");
     setDateFilter("All dates");
     setCategoryFilter("All");
     setPriorityFilter("All");
   }
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
-    >
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 p-5 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -194,15 +183,7 @@ export default function FollowUpTable({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto]">
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-600">
-            <SlidersHorizontal size={16} className="shrink-0 text-slate-400" />
-            <span className="sr-only">Filter by status</span>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-w-0 flex-1 bg-transparent outline-none">
-              {statusOptions.map((status) => <option key={status}>{status === "All" ? "All statuses" : status}</option>)}
-            </select>
-          </label>
-
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_auto]">
           <label className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-600">
             <span className="sr-only">Filter by due date</span>
             <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="w-full bg-transparent outline-none">
@@ -371,6 +352,6 @@ export default function FollowUpTable({
           </div>
         </div>
       )}
-    </motion.section>
+    </section>
   );
 }
