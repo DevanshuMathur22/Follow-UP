@@ -8,11 +8,11 @@ import {
   CircleAlert,
   Clock3,
   FilterX,
+  MessageCircle,
   PhoneCall,
   RotateCcw,
   Search,
   SlidersHorizontal,
-  UserRound,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +20,17 @@ import { formatDate, initials } from "../../lib/format";
 
 const PAGE_SIZE = 8;
 const statusOptions = ["All", "Today", "Upcoming", "Overdue", "Completed", "Cancelled"];
+
+function contactDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function whatsappNumber(value) {
+  const digits = contactDigits(value);
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
+  return digits;
+}
 
 function toDateKey(value) {
   return String(value || "").slice(0, 10);
@@ -56,15 +67,6 @@ function displayPriority(priority) {
 function displayType(type) {
   const normalized = String(type || "call").toLowerCase();
   return `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
-}
-
-function assignedUser(followUp, fallbackAssignee) {
-  const assigned = followUp.assignedTo || followUp.assignee || followUp.assignedUser;
-  if (assigned && typeof assigned === "object") {
-    return assigned.name || assigned.fullName || assigned.email || fallbackAssignee || "Assigned clinician";
-  }
-  if (typeof assigned === "string" && assigned.length < 20) return assigned;
-  return fallbackAssignee || "Current clinician";
 }
 
 function matchesDateRange(followUp, dateFilter) {
@@ -106,7 +108,6 @@ export default function FollowUpTable({
   onReschedule,
   onCancel,
   actionLoadingId,
-  currentAssignee,
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -243,16 +244,13 @@ export default function FollowUpTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-[1420px] w-full text-left">
+        <table className="min-w-[1080px] w-full text-left">
           <thead className="border-b border-slate-100 bg-slate-50">
             <tr className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               <th className="px-6 py-4">Patient</th>
               <th className="px-4 py-4">Contact</th>
-              <th className="px-4 py-4">Category</th>
-              <th className="px-4 py-4">Reason</th>
-              <th className="px-4 py-4">Due time</th>
-              <th className="px-4 py-4">Assigned user</th>
-              <th className="px-4 py-4">Priority</th>
+              <th className="px-4 py-4">Follow-up</th>
+              <th className="px-4 py-4">Due</th>
               <th className="px-4 py-4">Status</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
@@ -260,10 +258,10 @@ export default function FollowUpTable({
 
           <tbody className="divide-y divide-slate-100">
             {loading ? (
-              <tr><td colSpan="9" className="px-6 py-14 text-center text-sm text-slate-500">Loading follow-ups…</td></tr>
+              <tr><td colSpan="6" className="px-6 py-14 text-center text-sm text-slate-500">Loading follow-ups…</td></tr>
             ) : error ? (
               <tr>
-                <td colSpan="9" className="px-6 py-14 text-center text-sm text-rose-600">
+                <td colSpan="6" className="px-6 py-14 text-center text-sm text-rose-600">
                   <p>{error}</p>
                   <button type="button" onClick={onRetry} className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-100">Try again</button>
                 </td>
@@ -281,8 +279,13 @@ export default function FollowUpTable({
                         <div className="min-w-0">
                           {followUp.patientId ? (
                             <Link href={`/patients/${followUp.patientId}`} className="truncate text-sm font-semibold text-slate-700 transition hover:text-amber-700">{followUp.patientName || "Patient"}</Link>
-                          ) : <p className="truncate text-sm font-semibold text-slate-700">{followUp.patientName || "Patient"}</p>}
-                          <p className="mt-1 text-xs text-slate-400">{followUp.id}</p>
+                          ) : (
+                            <p className="truncate text-sm font-semibold text-slate-700">{followUp.patientName || "Patient"}</p>
+                          )}
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-slate-500">{followUp.city || "City not recorded"}</span>
+                            <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">{followUp.category || "General"}</span>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -290,28 +293,46 @@ export default function FollowUpTable({
                     <td className="px-4 py-4">
                       <p className="text-sm text-slate-600">{followUp.mobile || "Not recorded"}</p>
                       <p className="mt-1 text-xs text-slate-400">{followUp.city || "Location not recorded"}</p>
+                      <div className="mt-2 flex items-center gap-2">
+                        {contactDigits(followUp.mobile) && (
+                          <a
+                            href={`tel:${contactDigits(followUp.mobile)}`}
+                            title={`Call ${followUp.patientName || "patient"}`}
+                            aria-label={`Call ${followUp.patientName || "patient"}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            <PhoneCall size={13} /> Call
+                          </a>
+                        )}
+                        {whatsappNumber(followUp.whatsapp || followUp.mobile) && (
+                          <a
+                            href={`https://wa.me/${whatsappNumber(followUp.whatsapp || followUp.mobile)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`WhatsApp ${followUp.patientName || "patient"}`}
+                            aria-label={`WhatsApp ${followUp.patientName || "patient"}`}
+                            className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                          >
+                            <MessageCircle size={13} /> WhatsApp
+                          </a>
+                        )}
+                      </div>
                     </td>
 
-                    <td className="px-4 py-4"><span className="rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700">{followUp.category || "General"}</span></td>
-
-                    <td className="max-w-60 px-4 py-4">
+                    <td className="max-w-64 px-4 py-4">
                       <p className="line-clamp-2 text-sm leading-5 text-slate-600">{followUp.notes || "No reason added"}</p>
-                      <p className="mt-1 text-xs font-medium text-slate-400">{displayType(followUp.type)}</p>
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <span className="text-xs font-medium text-slate-400">{displayType(followUp.type)}</span>
+                        <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${priorityTone(followUp.priority)}`}>{displayPriority(followUp.priority)}</span>
+                      </div>
                     </td>
 
                     <td className="px-4 py-4">
                       <p className={`flex items-center gap-1.5 text-sm font-semibold ${followUp.status === "Overdue" ? "text-rose-600" : "text-slate-600"}`}>
                         <Clock3 size={15} />{formatDate(followUp.dueDate, { hour: "numeric", minute: "2-digit" })}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">Last visit {formatDate(followUp.lastVisit)}</p>
-                    </td>
-
-                    <td className="px-4 py-4">
-                      <p className="flex items-center gap-1.5 text-sm text-slate-600"><UserRound size={14} className="text-slate-400" />{assignedUser(followUp, currentAssignee)}</p>
                       {followUp.completedAt && <p className="mt-1 text-xs text-emerald-700">Completed {formatDate(followUp.completedAt)}</p>}
                     </td>
-
-                    <td className="px-4 py-4"><span className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${priorityTone(followUp.priority)}`}>{displayPriority(followUp.priority)}</span></td>
 
                     <td className="px-4 py-4"><span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusTone(followUp.status)}`}>{followUp.status === "Completed" ? <CheckCircle2 size={14} /> : followUp.status === "Overdue" ? <CircleAlert size={14} /> : followUp.status === "Cancelled" ? <XCircle size={14} /> : <PhoneCall size={14} />}{followUp.status}</span></td>
 
@@ -328,7 +349,7 @@ export default function FollowUpTable({
               })
             ) : (
               <tr>
-                <td colSpan="9" className="px-6 py-14 text-center">
+                <td colSpan="6" className="px-6 py-14 text-center">
                   <RotateCcw size={25} className="mx-auto text-slate-300" />
                   <p className="mt-3 text-sm font-semibold text-slate-600">No follow-ups in this queue</p>
                   <p className="mt-1 text-sm text-slate-400">Try another status, date range, category, or priority.</p>

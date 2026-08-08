@@ -91,6 +91,7 @@ function normalizeRelated(item, patientMap) {
     patientId: item.patientId || item.patient?._id || item.patient,
     patientName: item.patientName || item.patient?.fullName || patient?.fullName || "Patient",
     mobile: item.mobile || item.patient?.mobile || patient?.mobile || "—",
+    whatsapp: item.whatsapp || item.patient?.whatsapp || patient?.whatsapp || "",
     city: item.city || item.patient?.city || patient?.city || "—",
     category: item.category || item.patient?.category || patient?.category || "General",
   };
@@ -544,6 +545,7 @@ export async function createFollowUp(input) {
         id: makeId("FU", store.followUps),
         patientName: patient?.fullName,
         mobile: patient?.mobile,
+        whatsapp: patient?.whatsapp,
         city: patient?.city,
         category: patient?.category,
         lastVisit: patient?.lastVisit,
@@ -562,6 +564,7 @@ export async function createFollowUp(input) {
     patientId: followUp.patientId || patient?._id || patient || input.patientId,
     patientName: followUp.patientName || patient?.fullName,
     mobile: followUp.mobile || patient?.mobile,
+    whatsapp: followUp.whatsapp || patient?.whatsapp,
     city: followUp.city || patient?.city,
     category: followUp.category || patient?.category,
     dueDate: followUp.dueDate || input.dueDate,

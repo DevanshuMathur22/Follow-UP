@@ -572,7 +572,6 @@ export default function FollowUps() {
             onReschedule={openReschedule}
             onCancel={cancelFollowUp}
             actionLoadingId={actionLoadingId}
-            currentAssignee={currentAssignee}
           />
         </div>
       </section>
