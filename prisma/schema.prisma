@@ -26,16 +26,18 @@ enum PatientStatus {
 }
 
 model User {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  name           String
-  email          String    @unique
-  password       String
-  role           UserRole  @default(doctor)
-  active         Boolean   @default(true)
-  sessionVersion Int       @default(0)
-  lastLoginAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  name                String
+  email               String    @unique
+  password            String
+  role                UserRole  @default(doctor)
+  active              Boolean   @default(true)
+  sessionVersion      Int       @default(0)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   patientsCreated Patient[] @relation("PatientCreatedBy")
   patientsDeleted Patient[] @relation("PatientDeletedBy")
