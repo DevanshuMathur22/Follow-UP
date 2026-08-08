@@ -24,6 +24,15 @@ import { patientReference } from "../../lib/format";
 
 const tabs = ["All", "Today", "Upcoming", "Overdue", "Completed", "Cancelled"];
 
+const completionOutcomes = [
+  "Contacted",
+  "No answer",
+  "Busy",
+  "Call back later",
+  "Visit booked",
+  "Other",
+];
+
 const emptyForm = {
   patientId: "",
   dueDate: "",
@@ -91,6 +100,7 @@ export default function FollowUps() {
   const [actionLoadingId, setActionLoadingId] = useState("");
   const [formData, setFormData] = useState(emptyForm);
   const [completionTarget, setCompletionTarget] = useState(null);
+  const [completionOutcome, setCompletionOutcome] = useState("");
   const [completionNotes, setCompletionNotes] = useState("");
   const [nextFollowUpForm, setNextFollowUpForm] = useState(emptyNextFollowUp);
   const [clock, setClock] = useState(() => new Date());
@@ -241,7 +251,8 @@ export default function FollowUps() {
 
   function openCompletion(followUp) {
     setCompletionTarget(followUp);
-    setCompletionNotes(followUp.outcome || "");
+    setCompletionOutcome("");
+    setCompletionNotes("");
     setNextFollowUpForm({
       ...emptyNextFollowUp,
       type: String(followUp.type || "call").toLowerCase(),
@@ -252,6 +263,7 @@ export default function FollowUps() {
   function closeCompletion() {
     if (actionLoadingId) return;
     setCompletionTarget(null);
+    setCompletionOutcome("");
     setCompletionNotes("");
     setNextFollowUpForm(emptyNextFollowUp);
   }
@@ -259,6 +271,11 @@ export default function FollowUps() {
   async function completeFollowUp(event) {
     event.preventDefault();
     if (!completionTarget) return;
+
+    if (!completionOutcome) {
+      toast.error("Select a follow-up outcome");
+      return;
+    }
 
     if (nextFollowUpForm.enabled && !nextFollowUpForm.dueDate) {
       toast.error("Select the next follow-up date");
@@ -270,7 +287,7 @@ export default function FollowUps() {
 
       const payload = {
         status: "Completed",
-        outcome: completionNotes.trim(),
+        outcome: [completionOutcome, completionNotes.trim()].filter(Boolean).join(" — "),
         completedAt: new Date().toISOString(),
       };
 
@@ -292,6 +309,7 @@ export default function FollowUps() {
       );
 
       setCompletionTarget(null);
+      setCompletionOutcome("");
       setCompletionNotes("");
       setNextFollowUpForm(emptyNextFollowUp);
     } catch (updateError) {
@@ -383,7 +401,7 @@ export default function FollowUps() {
             <label className="text-sm font-medium text-slate-700">
               Assigned user
               <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-600"><UserRound size={16} className="text-slate-400" />{currentAssignee}</div>
-              <span className="mt-1 block text-xs text-slate-400">Assigned to the signed-in clinic user by the server.</span>
+              <span className="mt-1 block text-xs text-slate-400">Current clinic user shown from the active session.</span>
             </label>
 
             <label className="text-sm font-medium text-slate-700 xl:col-span-3">
@@ -419,8 +437,29 @@ export default function FollowUps() {
 
           <form onSubmit={completeFollowUp} className="mt-5">
             <label className="block text-sm font-medium text-slate-700">
+              Outcome
+              <select
+                required
+                value={completionOutcome}
+                onChange={(event) => setCompletionOutcome(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              >
+                <option value="">Select outcome</option>
+                {completionOutcomes.map((outcome) => (
+                  <option key={outcome} value={outcome}>{outcome}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mt-4 block text-sm font-medium text-slate-700">
               Completion notes
-              <textarea rows="4" value={completionNotes} onChange={(event) => setCompletionNotes(event.target.value)} placeholder="Outcome, response, next step, or reason the follow-up was closed" className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100" />
+              <textarea
+                rows="4"
+                value={completionNotes}
+                onChange={(event) => setCompletionNotes(event.target.value)}
+                placeholder="Add response, discussion, or next action"
+                className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+              />
             </label>
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
