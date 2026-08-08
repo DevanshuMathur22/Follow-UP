@@ -1,3 +1,8 @@
+import { readJsonBody } from "../../../src/lib/requestBody";
+import {
+  validMobile,
+  validText,
+} from "../../../src/lib/inputValidation";
 import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
@@ -26,9 +31,19 @@ function cleanPatient(data) {
 
 function validatePatient(data) {
   if (!data.fullName) return "Full name is required";
-  if (!data.mobile) return "Mobile number is required";
+  if (!validText(data.fullName, 120)) return "Full name is too long";
 
-  if (data.age !== null && (!Number.isInteger(data.age) || data.age < 0 || data.age > 150)) {
+  if (!data.mobile) return "Mobile number is required";
+  if (!validMobile(data.mobile)) return "Invalid mobile number";
+
+  if (data.whatsapp && !validMobile(data.whatsapp)) {
+    return "Invalid WhatsApp number";
+  }
+
+  if (
+    data.age !== null &&
+    (!Number.isInteger(data.age) || data.age < 0 || data.age > 150)
+  ) {
     return "Invalid age";
   }
 
@@ -36,8 +51,31 @@ function validatePatient(data) {
     return "Invalid gender";
   }
 
-  if (data.dob && Number.isNaN(data.dob.getTime())) {
-    return "Invalid date of birth";
+  if (data.dob) {
+    if (Number.isNaN(data.dob.getTime())) {
+      return "Invalid date of birth";
+    }
+
+    if (data.dob.getTime() > Date.now()) {
+      return "Date of birth cannot be in the future";
+    }
+  }
+
+  const limits = [
+    ["address", 500],
+    ["city", 100],
+    ["state", 100],
+    ["category", 100],
+    ["diagnosis", 2000],
+    ["history", 5000],
+    ["allergies", 2000],
+    ["remarks", 3000],
+  ];
+
+  for (const [field, maxLength] of limits) {
+    if (!validText(data[field], maxLength)) {
+      return `${field} is too long`;
+    }
   }
 
   return null;
@@ -147,7 +185,12 @@ export async function POST(request) {
       );
     }
 
-    const body = await request.json();
+    const { data: body, error: bodyError } = await readJsonBody(request);
+
+    if (bodyError) {
+      return bodyError;
+    }
+
     const data = cleanPatient(body);
 
     const validationError = validatePatient(data);

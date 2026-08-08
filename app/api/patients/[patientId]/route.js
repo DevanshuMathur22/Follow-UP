@@ -1,3 +1,9 @@
+import { readJsonBody } from "../../../../src/lib/requestBody";
+import {
+  validMobile,
+  validObjectId,
+  validText,
+} from "../../../../src/lib/inputValidation";
 import { validateWriteOrigin } from "../../../../src/lib/requestSecurity";
 import { forbiddenResponse, hasPermission, permissions } from "../../../../src/lib/permissions";
 import { getSessionUser } from "../../../../src/lib/auth";
@@ -49,7 +55,18 @@ function sameValue(current, next) {
 
 function validateUpdates(data) {
   if ("fullName" in data && !data.fullName) return "Full name is required";
+  if ("fullName" in data && !validText(data.fullName, 120)) {
+    return "Full name is too long";
+  }
+
   if ("mobile" in data && !data.mobile) return "Mobile number is required";
+  if ("mobile" in data && !validMobile(data.mobile)) {
+    return "Invalid mobile number";
+  }
+
+  if (data.whatsapp && !validMobile(data.whatsapp)) {
+    return "Invalid WhatsApp number";
+  }
 
   if (
     data.age !== undefined &&
@@ -63,8 +80,31 @@ function validateUpdates(data) {
     return "Invalid gender";
   }
 
-  if (data.dob && Number.isNaN(data.dob.getTime())) {
-    return "Invalid date of birth";
+  if (data.dob) {
+    if (Number.isNaN(data.dob.getTime())) {
+      return "Invalid date of birth";
+    }
+
+    if (data.dob.getTime() > Date.now()) {
+      return "Date of birth cannot be in the future";
+    }
+  }
+
+  const limits = [
+    ["address", 500],
+    ["city", 100],
+    ["state", 100],
+    ["category", 100],
+    ["diagnosis", 2000],
+    ["history", 5000],
+    ["allergies", 2000],
+    ["remarks", 3000],
+  ];
+
+  for (const [field, maxLength] of limits) {
+    if (field in data && !validText(data[field], maxLength)) {
+      return `${field} is too long`;
+    }
   }
 
   return null;
@@ -85,6 +125,16 @@ export async function GET(request, { params }) {
     }
 
     const { patientId } = await params;
+
+    if (!validObjectId(patientId)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid patient ID",
+        },
+        { status: 400 },
+      );
+    }
 
     const patient = await prisma.patient.findFirst({
       where: {
@@ -141,7 +191,22 @@ export async function PATCH(request, { params }) {
     }
 
     const { patientId } = await params;
-    const body = await request.json();
+
+    if (!validObjectId(patientId)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid patient ID",
+        },
+        { status: 400 },
+      );
+    }
+    const { data: body, error: bodyError } = await readJsonBody(request);
+
+    if (bodyError) {
+      return bodyError;
+    }
+
     const updates = buildUpdates(body);
 
     const validationError = validateUpdates(updates);
@@ -347,6 +412,16 @@ export async function DELETE(request, { params }) {
     }
 
     const { patientId } = await params;
+
+    if (!validObjectId(patientId)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid patient ID",
+        },
+        { status: 400 },
+      );
+    }
 
     const existingPatient = await prisma.patient.findFirst({
       where: {
