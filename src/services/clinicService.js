@@ -165,12 +165,35 @@ function clearDemoCategoryFollowUps(store, categoryName) {
   return patientIds.size;
 }
 
-function normalizeAppointment(item, patientMap) {
+function normalizeAppointment(item, patientMap = new Map()) {
   const related = normalizeRelated(item, patientMap);
   const scheduledAt = item.scheduledAt || item.date;
-  const date = String(scheduledAt || "").slice(0, 10);
-  const time = item.time || (scheduledAt ? new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(scheduledAt)) : "—");
-  return { ...related, date, time, clinic: item.clinic || item.location || "Main Clinic" };
+  const date = item.dateKey || String(scheduledAt || "").slice(0, 10);
+  const time =
+    item.startTime ||
+    item.time ||
+    (scheduledAt
+      ? new Intl.DateTimeFormat("en-IN", {
+          hour: "numeric",
+          minute: "2-digit",
+        }).format(new Date(scheduledAt))
+      : "—");
+
+  return {
+    ...related,
+    date,
+    time,
+    clinic:
+      item.location?.name ||
+      item.locationName ||
+      item.clinic ||
+      "Main Clinic",
+    locationName:
+      item.location?.name ||
+      item.locationName ||
+      item.clinic ||
+      "Main Clinic",
+  };
 }
 
 function normalizeInvoice(item, patientMap) {
@@ -482,62 +505,51 @@ export async function updateFollowUp(followUpId, updates) {
   return result.followUp || result;
 }
 
-export async function getAppointments() {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/appointments")),
-    () => getStore().appointments,
+export async function getAppointments(params = {}) {
+  const result = unwrap(
+    await api.get("/appointments", {
+      params,
+    }),
   );
-  const items = Array.isArray(result) ? result : result?.appointments || [];
-  const patientMap = new Map((await getPatients()).map((patient) => [patient.id, patient]));
-  return items.map((item) => normalizeAppointment(item, patientMap));
+
+  const items = Array.isArray(result)
+    ? result
+    : result?.appointments || [];
+
+  const patientMap = new Map(
+    items
+      .filter((item) => item.patient?.id)
+      .map((item) => [item.patient.id, item.patient]),
+  );
+
+  return items.map((item) =>
+    normalizeAppointment(item, patientMap),
+  );
 }
 
 export async function createAppointment(input) {
-  const apiPayload = { ...input, patient: input.patientId };
-  delete apiPayload.patientId;
-  const result = await requestOrDemo(
-    async () => unwrap(await api.post("/appointments", apiPayload)),
-    () => {
-      const store = getStore();
-      const patient = store.patients.find((item) => getId(item) === input.patientId);
-      const appointment = {
-        ...input,
-        id: makeId("APT", store.appointments),
-        patientName: patient?.fullName,
-        status: input.status || "Confirmed",
-      };
-      store.appointments.push(appointment);
-      saveStore(store);
-      return appointment;
-    },
+  const result = unwrap(
+    await api.post("/appointments", input),
   );
-  const appointment = result.appointment || result;
-  return normalizeAppointment(appointment, new Map());
+
+  return normalizeAppointment(
+    result?.appointment || result,
+    new Map(),
+  );
 }
 
 export async function updateAppointment(appointmentId, updates) {
-  const payload = { ...updates, patient: updates.patientId || updates.patient };
-  delete payload.patientId;
-  if (!payload.patient) delete payload.patient;
-  const result = await requestOrDemo(
-    async () => unwrap(await api.patch(`/appointments/${appointmentId}`, payload)),
-    () => {
-      const store = getStore();
-      const index = store.appointments.findIndex((appointment) => getId(appointment) === appointmentId);
-      if (index < 0) throw new Error("Appointment not found");
-      store.appointments[index] = { ...store.appointments[index], ...updates };
-      appendDemoActivity(store, {
-        module: "appointment",
-        action: updates.status ? "status-updated" : "updated",
-        title: "Appointment updated",
-        description: store.appointments[index].patientName || "Appointment",
-        relatedPath: "/appointments",
-      });
-      saveStore(store);
-      return store.appointments[index];
-    },
+  const result = unwrap(
+    await api.patch(
+      `/appointments/${appointmentId}`,
+      updates,
+    ),
   );
-  return normalizeAppointment(result.appointment || result, new Map());
+
+  return normalizeAppointment(
+    result?.appointment || result,
+    new Map(),
+  );
 }
 
 export async function createPrescription(input) {
@@ -608,6 +620,44 @@ export async function downloadPrescription(prescription) {
   link.download = prescription.attachmentName || "prescription";
   link.click();
   URL.revokeObjectURL(fileUrl);
+}
+
+export async function getClinicLocations() {
+  const result = unwrap(
+    await api.get("/clinic-locations"),
+  );
+
+  return Array.isArray(result)
+    ? result
+    : result?.locations || [];
+}
+
+export async function getDoctorAvailability(locationId) {
+  const result = unwrap(
+    await api.get("/availability", {
+      params: locationId ? { location: locationId } : {},
+    }),
+  );
+
+  return Array.isArray(result)
+    ? result
+    : result?.availability || [];
+}
+
+export async function createDoctorAvailability(input) {
+  const result = unwrap(
+    await api.post("/availability", input),
+  );
+
+  return result?.availability || result;
+}
+
+export async function updateDoctorAvailability(id, input) {
+  const result = unwrap(
+    await api.patch(`/availability/${id}`, input),
+  );
+
+  return result?.availability || result;
 }
 
 export async function getCertificateTemplates(includeInactive = false) {
@@ -1041,4 +1091,54 @@ export async function getAnalytics(months = 6) {
 
 export function resetDemoData() {
   saveStore(clone(demoData));
+}
+
+export async function getScheduleOverrides(params = {}) {
+  const result = unwrap(
+    await api.get("/availability/overrides", {
+      params,
+    }),
+  );
+
+  if (params.date) {
+    return result?.override || null;
+  }
+
+  return result?.overrides || [];
+}
+
+export async function saveScheduleOverride(dateKey, input) {
+  const result = unwrap(
+    await api.put(
+      `/availability/overrides/${dateKey}`,
+      input,
+    ),
+  );
+
+  return result?.override || result;
+}
+
+export async function restoreWeeklySchedule(dateKey) {
+  return unwrap(
+    await api.delete(
+      `/availability/overrides/${dateKey}`,
+    ),
+  );
+}
+
+export async function getAppointmentSlots(date, locationId) {
+  const result = unwrap(
+    await api.get("/appointments/slots", {
+      params: {
+        date,
+        ...(locationId
+          ? {
+              location: locationId,
+            }
+          : {}),
+      },
+    }),
+  );
+
+  return result;
 }

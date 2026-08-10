@@ -2,6 +2,8 @@
 
 import {
   Activity,
+  CalendarDays,
+  CalendarClock,
   FileCheck2,
   FileText,
   LayoutDashboard,
@@ -21,6 +23,12 @@ const navigation = [
     items: [
       { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
       { name: "Patients", path: "/patients", icon: Users },
+      {
+        name: "Appointments",
+        path: "/appointments",
+        icon: CalendarDays,
+        permission: permissions.MANAGE_APPOINTMENTS,
+      },
       { name: "Follow-ups", path: "/follow-ups", icon: Activity },
       {
         name: "Certificates",
@@ -33,6 +41,12 @@ const navigation = [
         path: "/categories",
         icon: Tags,
         permission: permissions.MANAGE_CATEGORIES,
+      },
+      {
+        name: "Availability",
+        path: "/availability",
+        icon: CalendarClock,
+        permission: permissions.MANAGE_AVAILABILITY,
       },
       {
         name: "Activity",

@@ -80,6 +80,7 @@ model Patient {
   followUps     FollowUp[]
   prescriptions Prescription[]
   certificates  Certificate[]
+  appointments  Appointment[]
 
   @@index([fullName])
   @@index([mobile])
@@ -160,6 +161,143 @@ model Prescription {
   @@index([issuedAt])
   @@index([createdAt])
   @@map("prescriptions")
+}
+
+model ClinicLocation {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  code               String  @unique
+  name               String
+  city               String
+  address            String?
+  phone              String?
+  timezone           String  @default("Asia/Kolkata")
+  defaultSlotMinutes Int     @default(10)
+  active             Boolean @default(true)
+
+  availabilities   DoctorAvailability[]
+  overrideSessions DoctorScheduleOverrideSession[]
+  appointments     Appointment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([city])
+  @@index([active])
+  @@map("clinicLocations")
+}
+
+model DoctorAvailability {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  locationId String         @db.ObjectId
+  location   ClinicLocation @relation(fields: [locationId], references: [id])
+
+  dayOfWeek Int
+  startTime String
+  endTime   String
+
+  slotMinutes Int     @default(10)
+  active      Boolean @default(true)
+  label       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([dayOfWeek])
+  @@index([active])
+  @@map("doctorAvailability")
+}
+
+model DoctorScheduleOverride {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  dateKey String  @unique
+  mode    String
+  note    String?
+
+  sessions DoctorScheduleOverrideSession[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mode])
+  @@map("doctorScheduleOverrides")
+}
+
+model DoctorScheduleOverrideSession {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  overrideId String                 @db.ObjectId
+  override   DoctorScheduleOverride @relation(fields: [overrideId], references: [id], onDelete: Cascade)
+
+  locationId String         @db.ObjectId
+  location   ClinicLocation @relation(fields: [locationId], references: [id])
+
+  startTime   String
+  endTime     String
+  slotMinutes Int     @default(10)
+  label       String?
+  active      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([overrideId])
+  @@index([locationId])
+  @@index([active])
+  @@map("doctorScheduleOverrideSessions")
+}
+
+model Appointment {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  bookingCode String @unique
+
+  patientId String  @db.ObjectId
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  locationId String         @db.ObjectId
+  location   ClinicLocation @relation(fields: [locationId], references: [id])
+
+  dateKey     String
+  startTime   String
+  endTime     String
+  scheduledAt DateTime
+
+  slotKey String @unique
+
+  category  String
+  visitType String @default("consultation")
+  status    String @default("Booked")
+  priority  String @default("normal")
+
+  reason String?
+  notes  String?
+
+  checkInAt             DateTime?
+  consultationStartedAt DateTime?
+  completedAt           DateTime?
+  cancelledAt           DateTime?
+  cancellationReason    String?
+
+  source      String  @default("internal")
+  createdById String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dateKey])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([category])
+  @@index([patientId])
+  @@index([locationId])
+  @@index([locationId, dateKey])
+  @@index([locationId, dateKey, startTime])
+  @@index([patientId, dateKey])
+  @@map("appointments")
 }
 
 model CertificateTemplate {
