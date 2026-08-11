@@ -22,6 +22,7 @@ import {
   createAppointment,
   createPatient,
   getAppointments,
+  getAppointmentSearchContext,
   getAppointmentSlots,
   getCategories,
   getClinicLocations,
@@ -145,6 +146,7 @@ export default function Appointments() {
   const [locationFilter, setLocationFilter] = useState("All");
 
   const [appointments, setAppointments] = useState([]);
+  const [searchAppointments, setSearchAppointments] = useState([]);
   const [patients, setPatients] = useState([]);
   const [categories, setCategories] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -156,6 +158,7 @@ export default function Appointments() {
 
   const [form, setForm] = useState(emptyForm);
   const [patientQuery, setPatientQuery] = useState("");
+  const [doctorSearch, setDoctorSearch] = useState("");
   const [slots, setSlots] = useState([]);
   const [slotsMode, setSlotsMode] = useState("");
   const [slotsNote, setSlotsNote] = useState("");
@@ -189,9 +192,14 @@ export default function Appointments() {
     }
   }
 
-  async function loadAppointments(selectedDate = date) {
+  async function loadAppointments(
+    selectedDate = date,
+    { silent = false } = {},
+  ) {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
 
       const data = await getAppointments({
         date: selectedDate,
@@ -199,12 +207,35 @@ export default function Appointments() {
 
       setAppointments(data || []);
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Unable to load appointments",
-      );
+      if (!silent) {
+        toast.error(
+          error.response?.data?.message ||
+            "Unable to load appointments",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
+  }
+
+  async function refreshPatientsSilently() {
+    try {
+      const patientData = await getPatients();
+      setPatients(patientData || []);
+    } catch {}
+  }
+
+  async function loadSearchAppointments() {
+    try {
+      const data =
+        await getAppointmentSearchContext(
+          localDateKey(),
+        );
+
+      setSearchAppointments(data || []);
+    } catch {}
   }
 
   async function loadDateSchedule(dateKey) {
@@ -260,11 +291,40 @@ export default function Appointments() {
 
   useEffect(() => {
     void loadBase();
+    void loadSearchAppointments();
   }, []);
 
   useEffect(() => {
     void loadAppointments(date);
   }, [date]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void loadAppointments(date, {
+        silent: true,
+      });
+
+      void loadSearchAppointments();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [date]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      void refreshPatientsSilently();
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!showForm) return;
@@ -462,8 +522,10 @@ export default function Appointments() {
         [
           patient.fullName,
           patient.mobile,
+          patient.whatsapp,
           patient.patientCode,
           patient.city,
+          patient.category,
         ]
           .filter(Boolean)
           .join(" ")
@@ -472,6 +534,71 @@ export default function Appointments() {
       )
       .slice(0, 8);
   }, [patients, patientQuery, form.patientId]);
+
+  const doctorSearchResults = useMemo(() => {
+    const query = doctorSearch.trim().toLowerCase();
+
+    if (!query) return [];
+
+    const today = localDateKey();
+
+    return patients
+      .filter((patient) =>
+        [
+          patient.fullName,
+          patient.mobile,
+          patient.whatsapp,
+          patient.patientCode,
+          patient.category,
+          patient.city,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query),
+      )
+      .slice(0, 8)
+      .map((patient) => {
+        const patientAppointments =
+          searchAppointments
+            .filter(
+              (appointment) =>
+                appointment.patientId === patient.id &&
+                ![
+                  "Completed",
+                  "Cancelled",
+                  "No-show",
+                ].includes(appointment.status),
+            )
+            .sort((first, second) => {
+              const firstKey =
+                `${first.dateKey || ""} ${first.startTime || ""}`;
+
+              const secondKey =
+                `${second.dateKey || ""} ${second.startTime || ""}`;
+
+              return firstKey.localeCompare(secondKey);
+            });
+
+        const todayAppointment =
+          patientAppointments.find(
+            (appointment) =>
+              appointment.dateKey === today,
+          );
+
+        return {
+          patient,
+          appointment:
+            todayAppointment ||
+            patientAppointments[0] ||
+            null,
+        };
+      });
+  }, [
+    patients,
+    doctorSearch,
+    searchAppointments,
+  ]);
 
   useEffect(() => {
     if (!showForm || !form.dateKey || dateScheduleLoading) {
@@ -705,101 +832,228 @@ export default function Appointments() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-semibold tracking-[0.16em] text-indigo-600">
-            CLINIC SCHEDULING
+            DOCTOR WORKSPACE
           </p>
 
-          <h1 className="mt-2 text-3xl font-semibold text-slate-800">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-800">
             Appointments
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            View exactly where the doctor is scheduled and which
-            patient is next at each location.
+            Search a patient, review today&apos;s queue and open the consultation.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openForm}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white"
-        >
-          <Plus size={18} />
-          New Appointment
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/patients/add"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            <UserRound size={17} />
+            Add Patient
+          </Link>
+
+          <button
+            type="button"
+            onClick={openForm}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            New Appointment
+          </button>
+        </div>
       </div>
 
-      <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setDate(localDateKey())}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-              date === localDateKey()
-                ? "bg-indigo-600 text-white"
-                : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            Today
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setDate(localDateKey(1))}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${
-              date === localDateKey(1)
-                ? "bg-indigo-600 text-white"
-                : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            Tomorrow
-          </button>
+      <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="relative">
+          <Search
+            size={19}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+          />
 
           <input
-            type="date"
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <select
-            value={cityFilter}
-            onChange={(event) => {
-              setCityFilter(event.target.value);
-              setLocationFilter("All");
-            }}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm"
-          >
-            {cities.map((city) => (
-              <option key={city} value={city}>
-                {city === "All" ? "All cities" : city}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={locationFilter}
+            value={doctorSearch}
             onChange={(event) =>
-              setLocationFilter(event.target.value)
+              setDoctorSearch(event.target.value)
             }
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm"
-          >
-            <option value="All">All hospitals / clinics</option>
+            placeholder="Search patient by name, mobile, patient ID or category..."
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3.5 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-50"
+          />
 
-            {availableLocations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name} · {location.city}
-              </option>
-            ))}
-          </select>
+          {doctorSearchResults.length > 0 && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+              {doctorSearchResults.map(
+                ({ patient, appointment }) => {
+                  const todayAppointment =
+                    appointment?.dateKey ===
+                    localDateKey();
+
+                  const href =
+                    appointment &&
+                    todayAppointment
+                      ? `/patients/${patient.id}?appointment=${appointment.id}&status=${encodeURIComponent(
+                          appointment.status || "Booked",
+                        )}`
+                      : `/patients/${patient.id}`;
+
+                  return (
+                    <Link
+                      key={patient.id}
+                      href={href}
+                      onClick={() =>
+                        setDoctorSearch("")
+                      }
+                      className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-indigo-50/50"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800">
+                          {patient.fullName}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                          {patient.mobile ||
+                            "No mobile"}
+                          {patient.patientCode
+                            ? ` · ${patient.patientCode}`
+                            : ""}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-400">
+                          {[
+                            patient.category,
+                            patient.city,
+                            patient.age
+                              ? `${patient.age} yrs`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 text-right">
+                        {appointment ? (
+                          <>
+                            <p
+                              className={`text-[11px] font-semibold ${
+                                todayAppointment
+                                  ? "text-emerald-600"
+                                  : "text-indigo-600"
+                              }`}
+                            >
+                              {todayAppointment
+                                ? "Appointment Today"
+                                : "Next Appointment"}
+                            </p>
+
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              {!todayAppointment &&
+                                `${dateLabel(
+                                  appointment.dateKey,
+                                )} · `}
+                              {timeLabel(
+                                appointment.startTime,
+                              )}
+                            </p>
+
+                            <span
+                              className={`mt-1 inline-flex rounded-md px-2 py-1 text-[10px] font-semibold ${statusTone(
+                                appointment.status,
+                              )}`}
+                            >
+                              {appointment.status}
+                            </span>
+                          </>
+                        ) : (
+                          <p className="text-[11px] font-semibold text-slate-400">
+                            No active appointment
+                          </p>
+                        )}
+
+                        <p className="mt-2 text-xs font-semibold text-indigo-600">
+                          Open Patient
+                        </p>
+                      </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <p className="mt-4 text-sm font-semibold text-slate-700">
-          {dateLabel(date)}
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setDate(localDateKey())}
+              className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                date === localDateKey()
+                  ? "bg-indigo-600 text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Today
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDate(localDateKey(1))}
+              className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+                date === localDateKey(1)
+                  ? "bg-indigo-600 text-white"
+                  : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Tomorrow
+            </button>
+
+            <input
+              type="date"
+              value={date}
+              onChange={(event) =>
+                setDate(event.target.value)
+              }
+              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-indigo-400"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={locationFilter}
+              onChange={(event) =>
+                setLocationFilter(event.target.value)
+              }
+              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-indigo-400"
+            >
+              <option value="All">
+                All clinics / hospitals
+              </option>
+
+              {locations.map((location) => (
+                <option
+                  key={location.id}
+                  value={location.id}
+                >
+                  {location.name}
+                  {location.city
+                    ? ` · ${location.city}`
+                    : ""}
+                </option>
+              ))}
+            </select>
+
+            <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              Live sync
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs font-medium text-slate-400">
+          {dateLabel(date)} · queue refreshes automatically
         </p>
       </section>
 
@@ -822,6 +1076,16 @@ export default function Appointments() {
             <p className="mt-1 text-sm text-slate-500">
               {timeLabel(currentPatient.startTime)}
             </p>
+
+            <Link
+              href={`/patients/${currentPatient.patientId}?appointment=${currentPatient.id}&status=${encodeURIComponent(
+                currentPatient.status || "Booked",
+              )}`}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-violet-700"
+            >
+              <ExternalLink size={15} />
+              Open Patient
+            </Link>
           </div>
 
           <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5">
@@ -927,12 +1191,36 @@ export default function Appointments() {
                             onClick={() => selectPatient(patient)}
                             className="block w-full rounded-lg px-3 py-3 text-left hover:bg-slate-50"
                           >
-                            <p className="text-sm font-semibold">
-                              {patient.fullName}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {patient.mobile} · {patient.category}
-                            </p>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-800">
+                                  {patient.fullName}
+                                </p>
+
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {patient.mobile || "No mobile"}
+                                  {patient.patientCode
+                                    ? ` · ${patient.patientCode}`
+                                    : ""}
+                                </p>
+
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {[
+                                    patient.category,
+                                    patient.city,
+                                    patient.age
+                                      ? `${patient.age} yrs`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </p>
+                              </div>
+
+                              <span className="shrink-0 rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-600">
+                                Select
+                              </span>
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -1345,7 +1633,7 @@ export default function Appointments() {
       <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b p-5 sm:p-6">
           <h2 className="font-semibold text-slate-800">
-            Doctor Queue
+            Today&apos;s Patients
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
@@ -1423,54 +1711,16 @@ export default function Appointments() {
                           {appointment.status}
                         </span>
 
-                        <div className="flex flex-wrap gap-2 lg:justify-end">
-                          {mobile && (
-                            <a
-                              href={`tel:${digits(mobile)}`}
-                              className="inline-flex size-9 items-center justify-center rounded-lg border"
-                            >
-                              <Phone size={15} />
-                            </a>
-                          )}
-
-                          {whatsapp && (
-                            <a
-                              href={`https://wa.me/${whatsapp}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex size-9 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600"
-                            >
-                              <MessageCircle size={15} />
-                            </a>
-                          )}
-
+                        <div className="flex lg:justify-end">
                           <Link
                             href={`/patients/${appointment.patientId}?appointment=${appointment.id}&status=${encodeURIComponent(
                               appointment.status || "Booked",
                             )}`}
-                            className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                            className="inline-flex w-fit items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
                           >
                             <ExternalLink size={15} />
                             Open Patient
                           </Link>
-
-                          <select
-                            value={appointment.status}
-                            disabled={
-                              actionLoadingId === appointment.id
-                            }
-                            onChange={(event) =>
-                              void changeStatus(
-                                appointment,
-                                event.target.value,
-                              )
-                            }
-                            className="rounded-lg border px-2 text-xs font-semibold"
-                          >
-                            {statuses.map((status) => (
-                              <option key={status}>{status}</option>
-                            ))}
-                          </select>
                         </div>
                       </article>
                     );

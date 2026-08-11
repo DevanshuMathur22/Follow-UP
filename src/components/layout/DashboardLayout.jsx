@@ -8,7 +8,7 @@ import useFollowUpReminders from "../../hooks/useFollowUpReminders";
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../../services/clinicService";
 import { getCurrentUser } from "../../services/authService";
 
-export default function DashboardLayout({ children }) {
+export default function DashboardLayout({ children, focusMode = false }) {
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -109,6 +109,16 @@ export default function DashboardLayout({ children }) {
         <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-medium text-slate-500 shadow-sm">
           Opening secure workspace…
         </div>
+      </div>
+    );
+  }
+
+  if (focusMode) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <main className="p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     );
   }

@@ -178,6 +178,18 @@ model Prescription {
   @@map("prescriptions")
 }
 
+model PrescriptionSaveRequest {
+  id String @id @map("_id")
+
+  patientId String @db.ObjectId
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId])
+  @@index([createdAt])
+  @@map("prescription_save_requests")
+}
+
 model ClinicLocation {
   id String @id @default(auto()) @map("_id") @db.ObjectId
 

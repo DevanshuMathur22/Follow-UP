@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import PatientTable from "../components/patients/PatientTable";
+import PatientExcelTools from "../components/patients/PatientExcelTools";
 import {
   archivePatient,
   getPatients,
@@ -101,13 +102,20 @@ export default function Patients() {
           </p>
         </div>
 
-        <Link
-          href="/patients/add"
-          className="flex w-fit items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
-        >
-          <Plus size={18} />
-          Add Patient
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <PatientExcelTools
+            patients={patients}
+            onImported={loadPatients}
+          />
+
+          <Link
+            href="/patients/add"
+            className="flex w-fit items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
+          >
+            <Plus size={18} />
+            Add Patient
+          </Link>
+        </div>
       </div>
 
       <section className="mt-8">

@@ -310,6 +310,10 @@ export async function POST(request) {
 
     const formData = await request.formData();
 
+    const requestId = cleanText(
+      formData.get("requestId"),
+    );
+
     const recordType =
       String(formData.get("recordType") || "uploaded")
         .trim()
@@ -372,6 +376,25 @@ export async function POST(request) {
     const nextVisit = parseDate(
       formData.get("nextVisit"),
     );
+
+    if (
+      recordType === "generated" &&
+      (
+        !requestId ||
+        !/^[A-Za-z0-9_-]{20,100}$/.test(
+          requestId,
+        )
+      )
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "Invalid prescription request ID",
+        },
+        { status: 400 },
+      );
+    }
 
     const file = formData.get("file");
 
@@ -593,8 +616,34 @@ export async function POST(request) {
       };
     }
 
-    const prescription =
-      await prisma.prescription.create({
+    if (recordType === "generated") {
+      try {
+        await prisma.prescriptionSaveRequest.create({
+          data: {
+            id: requestId,
+            patientId,
+          },
+        });
+      } catch (requestError) {
+        if (requestError?.code === "P2002") {
+          return Response.json(
+            {
+              success: false,
+              message:
+                "This prescription has already been submitted. Refresh patient history before saving again.",
+            },
+            { status: 409 },
+          );
+        }
+
+        throw requestError;
+      }
+    }
+
+    let prescription;
+
+    try {
+      prescription = await prisma.prescription.create({
         data: {
           patientId,
           recordType,
@@ -628,6 +677,22 @@ export async function POST(request) {
           },
         },
       });
+    } catch (createError) {
+      if (
+        recordType === "generated" &&
+        requestId
+      ) {
+        try {
+          await prisma.prescriptionSaveRequest.delete({
+            where: {
+              id: requestId,
+            },
+          });
+        } catch {}
+      }
+
+      throw createError;
+    }
 
     uploadedBlob = null;
 

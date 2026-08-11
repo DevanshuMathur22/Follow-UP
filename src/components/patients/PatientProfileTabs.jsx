@@ -19,7 +19,7 @@ import {
 import PatientTimeline from "./PatientTimeline";
 import PatientPrescriptions from "./PatientPrescriptions";
 
-const tabs = [
+const profileTabs = [
   { name: "Overview", icon: UserRound },
   { name: "Prescriptions", icon: FileText },
   { name: "Follow-ups", icon: Activity },
@@ -153,7 +153,13 @@ export default function PatientProfileTabs({
   prescriptions = [],
   activities = [],
   onRefresh,
+  doctorMode = false,
 }) {
+  const tabs = doctorMode
+    ? profileTabs.filter(
+        (tab) => tab.name !== "Follow-ups",
+      )
+    : profileTabs;
   const [activeTab, setActiveTab] =
     useState("Overview");
   const [showFollowUpEditor, setShowFollowUpEditor] =
@@ -334,7 +340,13 @@ export default function PatientProfileTabs({
 
       <div className="p-5 sm:p-6">
         {activeTab === "Overview" && (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div
+            className={`grid gap-6 ${
+              doctorMode
+                ? ""
+                : "xl:grid-cols-[minmax(0,1fr)_360px]"
+            }`}
+          >
             <div>
               <p className="text-xs font-semibold tracking-[0.16em] text-slate-400">
                 PATIENT SUMMARY
@@ -506,7 +518,8 @@ export default function PatientProfileTabs({
               </div>
             </div>
 
-            <aside className="rounded-2xl bg-teal-50 p-5">
+            {!doctorMode && (
+              <aside className="rounded-2xl bg-teal-50 p-5">
               <div className="flex items-center gap-2 text-teal-800">
                 <CalendarDays size={19} />
                 <p className="text-sm font-semibold">
@@ -693,7 +706,8 @@ export default function PatientProfileTabs({
                   </p>
                 </div>
               </div>
-            </aside>
+              </aside>
+            )}
           </div>
         )}
 

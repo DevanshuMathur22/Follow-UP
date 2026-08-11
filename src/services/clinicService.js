@@ -527,6 +527,18 @@ export async function getAppointments(params = {}) {
   );
 }
 
+export async function getAppointmentSearchContext(fromDate) {
+  const result = unwrap(
+    await api.get("/appointments/search-context", {
+      params: fromDate ? { from: fromDate } : {},
+    }),
+  );
+
+  return Array.isArray(result)
+    ? result
+    : result?.appointments || [];
+}
+
 export async function createAppointment(input) {
   const result = unwrap(
     await api.post("/appointments", input),

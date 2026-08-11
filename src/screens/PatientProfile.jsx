@@ -19,16 +19,15 @@ import Link from "next/link";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import PatientProfileTabs from "../components/patients/PatientProfileTabs";
+import DoctorPatientWorkspace from "../components/patients/DoctorPatientWorkspace";
 import PatientForm from "../components/patients/PatientForm";
 import {
-  createFollowUp,
   getActivityLogs,
   getCategories,
   getFollowUps,
   getPatient,
   getPrescriptions,
   updateAppointment,
-  updateFollowUp,
   updatePatient,
 } from "../services/clinicService";
 import {
@@ -61,9 +60,6 @@ export default function PatientProfile() {
     initialVisitStatus,
   );
   const [visitSaving, setVisitSaving] = useState(false);
-  const [showCompleteVisit, setShowCompleteVisit] = useState(false);
-  const [followUpChoice, setFollowUpChoice] = useState("1-month");
-  const [customFollowUpDate, setCustomFollowUpDate] = useState("");
 
   const loadProfile = useCallback(async () => {
     if (!patientId) return;
@@ -151,6 +147,51 @@ export default function PatientProfile() {
     setVisitStatus(initialVisitStatus);
   }, [initialVisitStatus, appointmentId]);
 
+  useEffect(() => {
+    if (
+      !appointmentId ||
+      !initialVisitStatus ||
+      [
+        "With Doctor",
+        "Completed",
+        "Cancelled",
+        "No-show",
+      ].includes(initialVisitStatus)
+    ) {
+      return;
+    }
+
+    let active = true;
+
+    async function startVisit() {
+      try {
+        const updated =
+          await updateAppointment(
+            appointmentId,
+            {
+              status: "With Doctor",
+            },
+          );
+
+        if (active) {
+          setVisitStatus(
+            updated?.status ||
+              "With Doctor",
+          );
+        }
+      } catch {}
+    }
+
+    void startVisit();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    appointmentId,
+    initialVisitStatus,
+  ]);
+
   async function changeVisitStatus(status) {
     if (!appointmentId) return;
 
@@ -181,135 +222,6 @@ export default function PatientProfile() {
     }
   }
 
-  function followUpDueDate() {
-    if (followUpChoice === "none") return null;
-
-    if (followUpChoice === "custom") {
-      if (!customFollowUpDate) return null;
-
-      const [year, month, day] = customFollowUpDate
-        .split("-")
-        .map(Number);
-
-      return new Date(
-        year,
-        month - 1,
-        day,
-        10,
-        0,
-        0,
-      ).toISOString();
-    }
-
-    const date = new Date();
-    date.setHours(10, 0, 0, 0);
-
-    if (followUpChoice === "15-days") {
-      date.setDate(date.getDate() + 15);
-    }
-
-    if (
-      ["1-month", "2-months", "3-months"].includes(
-        followUpChoice,
-      )
-    ) {
-      const months = Number(
-        followUpChoice.split("-")[0],
-      );
-
-      const originalDay = date.getDate();
-
-      date.setDate(1);
-      date.setMonth(date.getMonth() + months);
-
-      const lastDay = new Date(
-        date.getFullYear(),
-        date.getMonth() + 1,
-        0,
-      ).getDate();
-
-      date.setDate(Math.min(originalDay, lastDay));
-    }
-
-    return date.toISOString();
-  }
-
-  async function completeVisit() {
-    if (!appointmentId) return;
-
-    if (
-      followUpChoice === "custom" &&
-      !customFollowUpDate
-    ) {
-      toast.error("Select custom follow-up date");
-      return;
-    }
-
-    try {
-      setVisitSaving(true);
-
-      const dueDate = followUpDueDate();
-
-      if (dueDate) {
-        const existingFollowUp = [...related.followUps]
-          .filter(
-            (item) =>
-              !["completed", "cancelled"].includes(
-                String(item.status || "").toLowerCase(),
-              ),
-          )
-          .sort(
-            (first, second) =>
-              new Date(first.dueDate || 0).getTime() -
-              new Date(second.dueDate || 0).getTime(),
-          )[0];
-
-        if (existingFollowUp?.id) {
-          await updateFollowUp(existingFollowUp.id, {
-            dueDate,
-            type: "call",
-            priority: "medium",
-            status: "Scheduled",
-            source: "manual",
-            notes:
-              "Doctor advised follow-up after consultation",
-          });
-        } else {
-          await createFollowUp({
-            patientId: patient.id,
-            dueDate,
-            type: "call",
-            priority: "medium",
-            notes:
-              "Doctor advised follow-up after consultation",
-          });
-        }
-      }
-
-      await updateAppointment(appointmentId, {
-        status: "Completed",
-      });
-
-      setVisitStatus("Completed");
-      setShowCompleteVisit(false);
-
-      toast.success(
-        dueDate
-          ? "Visit completed and follow-up scheduled"
-          : "Visit completed",
-      );
-
-      router.push("/appointments");
-    } catch (visitError) {
-      toast.error(
-        visitError.response?.data?.message ||
-          "Unable to complete visit",
-      );
-    } finally {
-      setVisitSaving(false);
-    }
-  }
-
   async function handleUpdate(values) {
     try {
       setSaving(true);
@@ -334,7 +246,7 @@ export default function PatientProfile() {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout focusMode={Boolean(appointmentId)}>
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-sm">
           Loading patient record…
         </div>
@@ -344,7 +256,7 @@ export default function PatientProfile() {
 
   if (error || !patient) {
     return (
-      <DashboardLayout>
+      <DashboardLayout focusMode={Boolean(appointmentId)}>
         <div className="rounded-2xl border border-rose-100 bg-rose-50 p-8 text-center">
           <p className="font-semibold text-rose-700">
             {error || "Patient not found."}
@@ -375,7 +287,7 @@ export default function PatientProfile() {
     .join(" · ");
 
   return (
-    <DashboardLayout>
+    <DashboardLayout focusMode={Boolean(appointmentId)}>
       <Link
         href={appointmentId ? "/appointments" : "/patients"}
         className="flex w-fit items-center gap-2 text-sm font-medium text-teal-600 transition hover:text-teal-700"
@@ -386,7 +298,18 @@ export default function PatientProfile() {
           : "Back to patients"}
       </Link>
 
-      {editing ? (
+      {appointmentId ? (
+        <DoctorPatientWorkspace
+          patient={patient}
+          prescriptions={related.prescriptions}
+          onRefresh={loadProfile}
+          saving={visitSaving}
+          status={visitStatus || "With Doctor"}
+          onDone={() =>
+            void changeVisitStatus("Completed")
+          }
+        />
+      ) : editing ? (
         <section className="mt-6">
           <PatientForm
             initialValues={patient}
@@ -428,14 +351,14 @@ export default function PatientProfile() {
                       type="button"
                       disabled={visitSaving}
                       onClick={() =>
-                        setShowCompleteVisit(true)
+                        void changeVisitStatus("Completed")
                       }
                       className="inline-flex w-fit items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
                     >
                       <CheckCircle2 size={17} />
                       {visitSaving
                         ? "Completing..."
-                        : "Complete Visit"}
+                        : "Done"}
                     </button>
                   ) : (
                     <button
@@ -455,99 +378,6 @@ export default function PatientProfile() {
                 </div>
               </section>
             )}
-
-          {showCompleteVisit && appointmentId && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-              <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-600">
-                      Complete Visit
-                    </p>
-
-                    <h2 className="mt-1 text-xl font-semibold text-slate-800">
-                      Next follow-up?
-                    </h2>
-
-                    <p className="mt-2 text-sm text-slate-500">
-                      Select when the patient should be contacted again.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={visitSaving}
-                    onClick={() =>
-                      setShowCompleteVisit(false)
-                    }
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-500"
-                  >
-                    Cancel
-                  </button>
-                </div>
-
-                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {[
-                    ["15-days", "15 Days"],
-                    ["1-month", "1 Month"],
-                    ["2-months", "2 Months"],
-                    ["3-months", "3 Months"],
-                    ["custom", "Custom Date"],
-                    ["none", "No Follow-up"],
-                  ].map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      disabled={visitSaving}
-                      onClick={() =>
-                        setFollowUpChoice(value)
-                      }
-                      className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${
-                        followUpChoice === value
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {followUpChoice === "custom" && (
-                  <label className="mt-4 block text-sm font-medium text-slate-700">
-                    Follow-up date
-                    <input
-                      type="date"
-                      required
-                      value={customFollowUpDate}
-                      onChange={(event) =>
-                        setCustomFollowUpDate(
-                          event.target.value,
-                        )
-                      }
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500"
-                    />
-                  </label>
-                )}
-
-                <div className="mt-6 border-t border-slate-100 pt-5">
-                  <button
-                    type="button"
-                    disabled={visitSaving}
-                    onClick={() =>
-                      void completeVisit()
-                    }
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-                  >
-                    <CheckCircle2 size={18} />
-                    {visitSaving
-                      ? "Completing Visit..."
-                      : "Complete Visit"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -642,6 +472,7 @@ export default function PatientProfile() {
               prescriptions={related.prescriptions}
               activities={related.activities}
               onRefresh={loadProfile}
+              doctorMode={Boolean(appointmentId)}
             />
           </section>
         </>
