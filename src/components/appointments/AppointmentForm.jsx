@@ -161,6 +161,10 @@ export default function Appointments() {
   const [slotsNote, setSlotsNote] = useState("");
   const [slotsLoading, setSlotsLoading] = useState(false);
 
+  const [dateSlots, setDateSlots] = useState([]);
+  const [dateScheduleMode, setDateScheduleMode] = useState("");
+  const [dateScheduleLoading, setDateScheduleLoading] = useState(false);
+
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [newPatient, setNewPatient] = useState(emptyPatientForm);
   const [patientSaving, setPatientSaving] = useState(false);
@@ -203,6 +207,33 @@ export default function Appointments() {
     }
   }
 
+  async function loadDateSchedule(dateKey) {
+    if (!dateKey) {
+      setDateSlots([]);
+      setDateScheduleMode("");
+      return;
+    }
+
+    try {
+      setDateScheduleLoading(true);
+
+      const result = await getAppointmentSlots(dateKey);
+
+      setDateSlots(result?.slots || []);
+      setDateScheduleMode(result?.mode || "");
+    } catch (error) {
+      setDateSlots([]);
+      setDateScheduleMode("");
+
+      toast.error(
+        error.response?.data?.message ||
+          "Unable to load doctor schedule",
+      );
+    } finally {
+      setDateScheduleLoading(false);
+    }
+  }
+
   async function loadSlots(dateKey, locationId) {
     if (!dateKey || !locationId) {
       setSlots([]);
@@ -237,6 +268,13 @@ export default function Appointments() {
 
   useEffect(() => {
     if (!showForm) return;
+
+    void loadDateSchedule(form.dateKey);
+  }, [showForm, form.dateKey]);
+
+  useEffect(() => {
+    if (!showForm) return;
+
     void loadSlots(form.dateKey, form.locationId);
   }, [showForm, form.dateKey, form.locationId]);
 
@@ -270,20 +308,42 @@ export default function Appointments() {
     [locations],
   );
 
+  const availableLocationIds = useMemo(
+    () =>
+      new Set(
+        dateSlots
+          .map((slot) => slot.locationId)
+          .filter(Boolean),
+      ),
+    [dateSlots],
+  );
+
+  const dateAvailableLocations = useMemo(
+    () =>
+      locations.filter((location) =>
+        availableLocationIds.has(location.id),
+      ),
+    [locations, availableLocationIds],
+  );
+
   const formCities = useMemo(
     () =>
       Array.from(
-        new Set(locations.map((item) => item.city).filter(Boolean)),
+        new Set(
+          dateAvailableLocations
+            .map((item) => item.city)
+            .filter(Boolean),
+        ),
       ).sort(),
-    [locations],
+    [dateAvailableLocations],
   );
 
   const formLocations = useMemo(
     () =>
-      form.city
-        ? locations.filter((item) => item.city === form.city)
-        : locations,
-    [locations, form.city],
+      dateAvailableLocations.filter(
+        (item) => !form.city || item.city === form.city,
+      ),
+    [dateAvailableLocations, form.city],
   );
 
   const filteredAppointments = useMemo(() => {
@@ -313,10 +373,57 @@ export default function Appointments() {
     [locations, cityFilter],
   );
 
+  const activeAppointments = useMemo(
+    () =>
+      filteredAppointments
+        .filter(
+          (item) =>
+            !["Completed", "Cancelled", "No-show"].includes(
+              item.status,
+            ),
+        )
+        .sort((a, b) =>
+          String(a.startTime || "").localeCompare(
+            String(b.startTime || ""),
+          ),
+        ),
+    [filteredAppointments],
+  );
+
+  const historyAppointments = useMemo(
+    () =>
+      filteredAppointments
+        .filter((item) =>
+          ["Completed", "Cancelled", "No-show"].includes(
+            item.status,
+          ),
+        )
+        .sort((a, b) => {
+          const first =
+            new Date(
+              a.completedAt ||
+                a.cancelledAt ||
+                a.updatedAt ||
+                0,
+            ).getTime() || 0;
+
+          const second =
+            new Date(
+              b.completedAt ||
+                b.cancelledAt ||
+                b.updatedAt ||
+                0,
+            ).getTime() || 0;
+
+          return second - first;
+        }),
+    [filteredAppointments],
+  );
+
   const groupedAppointments = useMemo(() => {
     const map = new Map();
 
-    filteredAppointments.forEach((item) => {
+    activeAppointments.forEach((item) => {
       const locationName =
         item.location?.name || item.locationName || "Clinic";
 
@@ -343,7 +450,7 @@ export default function Appointments() {
         ),
       ),
     }));
-  }, [filteredAppointments]);
+  }, [activeAppointments]);
 
   const patientResults = useMemo(() => {
     const query = patientQuery.trim().toLowerCase();
@@ -366,6 +473,39 @@ export default function Appointments() {
       .slice(0, 8);
   }, [patients, patientQuery, form.patientId]);
 
+  useEffect(() => {
+    if (!showForm || !form.dateKey || dateScheduleLoading) {
+      return;
+    }
+
+    const locationStillValid =
+      !form.locationId ||
+      availableLocationIds.has(form.locationId);
+
+    const cityStillValid =
+      !form.city ||
+      formCities.includes(form.city);
+
+    if (!locationStillValid || !cityStillValid) {
+      setForm((current) => ({
+        ...current,
+        city: "",
+        locationId: "",
+        startTime: "",
+      }));
+
+      setSlots([]);
+    }
+  }, [
+    showForm,
+    form.dateKey,
+    form.city,
+    form.locationId,
+    dateScheduleLoading,
+    availableLocationIds,
+    formCities,
+  ]);
+
   const selectedPatient = patients.find(
     (patient) => patient.id === form.patientId,
   );
@@ -374,20 +514,7 @@ export default function Appointments() {
     (location) => location.id === form.locationId,
   );
 
-  const activeQueue = useMemo(
-    () =>
-      filteredAppointments
-        .filter(
-          (item) =>
-            !["Completed", "Cancelled", "No-show"].includes(item.status),
-        )
-        .sort((a, b) =>
-          String(a.startTime || "").localeCompare(
-            String(b.startTime || ""),
-          ),
-        ),
-    [filteredAppointments],
-  );
+  const activeQueue = activeAppointments;
 
   const currentPatient =
     activeQueue.find((item) => item.status === "With Doctor") ||
@@ -845,6 +972,11 @@ export default function Appointments() {
                 City
                 <select
                   value={form.city}
+                  disabled={
+                    !form.dateKey ||
+                    dateScheduleLoading ||
+                    !formCities.length
+                  }
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -853,9 +985,17 @@ export default function Appointments() {
                       startTime: "",
                     }))
                   }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <option value="">Select city</option>
+                  <option value="">
+                    {dateScheduleLoading
+                      ? "Checking doctor schedule..."
+                      : !form.dateKey
+                        ? "Select date first"
+                        : formCities.length
+                          ? "Select available city"
+                          : "Doctor unavailable"}
+                  </option>
 
                   {formCities.map((city) => (
                     <option key={city}>{city}</option>
@@ -867,12 +1007,17 @@ export default function Appointments() {
                 Hospital / Clinic
                 <select
                   value={form.locationId}
+                  disabled={!form.city || !formLocations.length}
                   onChange={(event) =>
                     updateForm("locationId", event.target.value)
                   }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <option value="">Select location</option>
+                  <option value="">
+                    {!form.city
+                      ? "Select available city first"
+                      : "Select available location"}
+                  </option>
 
                   {formLocations.map((location) => (
                     <option key={location.id} value={location.id}>
@@ -1204,7 +1349,7 @@ export default function Appointments() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            {dateLabel(date)} · {filteredAppointments.length} patients
+            {dateLabel(date)} · {activeAppointments.length} active patient{activeAppointments.length === 1 ? "" : "s"}
           </p>
         </div>
 
@@ -1300,10 +1445,13 @@ export default function Appointments() {
                           )}
 
                           <Link
-                            href={`/patients/${appointment.patientId}`}
-                            className="inline-flex size-9 items-center justify-center rounded-lg border"
+                            href={`/patients/${appointment.patientId}?appointment=${appointment.id}&status=${encodeURIComponent(
+                              appointment.status || "Booked",
+                            )}`}
+                            className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
                           >
                             <ExternalLink size={15} />
+                            Open Patient
                           </Link>
 
                           <select
@@ -1339,6 +1487,100 @@ export default function Appointments() {
             />
             <p className="mt-3 text-sm font-semibold text-slate-700">
               No patients for this date/location
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b p-5 sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-slate-800">
+                Today&apos;s History
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                {dateLabel(date)} · {historyAppointments.length} completed / closed visit{historyAppointments.length === 1 ? "" : "s"}
+              </p>
+            </div>
+
+            <span className="w-fit rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+              {historyAppointments.filter((item) => item.status === "Completed").length} seen
+            </span>
+          </div>
+        </div>
+
+        {historyAppointments.length ? (
+          <div className="divide-y divide-slate-100">
+            {historyAppointments.map((appointment, index) => (
+              <article
+                key={appointment.id}
+                className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[90px_minmax(220px,1fr)_minmax(160px,1fr)_120px_auto] lg:items-center"
+              >
+                <div>
+                  <p className="font-semibold text-slate-800">
+                    {timeLabel(appointment.startTime)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Visit #{index + 1}
+                  </p>
+                </div>
+
+                <div>
+                  <Link
+                    href={`/patients/${appointment.patientId}`}
+                    className="font-semibold text-slate-800 transition hover:text-indigo-600"
+                  >
+                    {appointmentPatientName(appointment)}
+                  </Link>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    {appointment.category || "General"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-slate-700">
+                    {appointment.location?.name || "Clinic"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    {appointment.location?.city || ""}
+                  </p>
+                </div>
+
+                <span
+                  className={`w-fit rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusTone(
+                    appointment.status,
+                  )}`}
+                >
+                  {appointment.status}
+                </span>
+
+                <Link
+                  href={`/patients/${appointment.patientId}`}
+                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                >
+                  <ExternalLink size={15} />
+                  Open Patient
+                </Link>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="p-10 text-center">
+            <CheckCircle2
+              size={28}
+              className="mx-auto text-slate-300"
+            />
+
+            <p className="mt-3 text-sm font-semibold text-slate-700">
+              No completed visits yet
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Patients will move here after their visit is completed.
             </p>
           </div>
         )}

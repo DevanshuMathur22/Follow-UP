@@ -45,23 +45,34 @@ export async function PATCH(request, { params }) {
 
     if (!validObjectId(availabilityId)) {
       return Response.json(
-        { success: false, message: "Invalid availability ID" },
+        {
+          success: false,
+          message: "Invalid availability ID",
+        },
         { status: 400 },
       );
     }
 
-    const current = await prisma.doctorAvailability.findUnique({
-      where: { id: availabilityId },
-    });
+    const current =
+      await prisma.doctorAvailability.findUnique({
+        where: {
+          id: availabilityId,
+        },
+      });
 
     if (!current) {
       return Response.json(
-        { success: false, message: "Availability not found" },
+        {
+          success: false,
+          message: "Availability not found",
+        },
         { status: 404 },
       );
     }
 
-    const { data: body, error: bodyError } = await readJsonBody(request);
+    const { data: body, error: bodyError } =
+      await readJsonBody(request);
+
     if (bodyError) return bodyError;
 
     const locationId =
@@ -89,30 +100,88 @@ export async function PATCH(request, { params }) {
         ? Number(body.slotMinutes)
         : current.slotMinutes;
 
-    if (!validObjectId(locationId)) {
+    const recurrenceType =
+      body.recurrenceType !== undefined
+        ? String(body.recurrenceType).toLowerCase()
+        : current.recurrenceType || "weekly";
+
+    const weekOfMonth =
+      recurrenceType === "monthly"
+        ? body.weekOfMonth !== undefined
+          ? Number(body.weekOfMonth)
+          : current.weekOfMonth
+        : null;
+
+    const active =
+      body.active === undefined
+        ? current.active
+        : Boolean(body.active);
+
+    if (!["weekly", "monthly"].includes(recurrenceType)) {
       return Response.json(
-        { success: false, message: "Invalid clinic location" },
+        {
+          success: false,
+          message: "Invalid recurrence type",
+        },
         { status: 400 },
       );
     }
 
-    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+    if (
+      recurrenceType === "monthly" &&
+      (!Number.isInteger(weekOfMonth) ||
+        weekOfMonth < 1 ||
+        weekOfMonth > 5)
+    ) {
       return Response.json(
-        { success: false, message: "Invalid day" },
+        {
+          success: false,
+          message: "Invalid week of month",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!validObjectId(locationId)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid clinic location",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      !Number.isInteger(dayOfWeek) ||
+      dayOfWeek < 0 ||
+      dayOfWeek > 6
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid day",
+        },
         { status: 400 },
       );
     }
 
     if (!validTime(startTime) || !validTime(endTime)) {
       return Response.json(
-        { success: false, message: "Invalid start or end time" },
+        {
+          success: false,
+          message: "Invalid start or end time",
+        },
         { status: 400 },
       );
     }
 
     if (minutes(startTime) >= minutes(endTime)) {
       return Response.json(
-        { success: false, message: "End time must be after start time" },
+        {
+          success: false,
+          message: "End time must be after start time",
+        },
         { status: 400 },
       );
     }
@@ -123,84 +192,105 @@ export async function PATCH(request, { params }) {
       slotMinutes > 120
     ) {
       return Response.json(
-        { success: false, message: "Invalid slot duration" },
+        {
+          success: false,
+          message: "Invalid slot duration",
+        },
         { status: 400 },
       );
     }
 
-    const location = await prisma.clinicLocation.findFirst({
-      where: {
-        id: locationId,
-        active: true,
-      },
-      select: {
-        id: true,
-      },
-    });
+    const location =
+      await prisma.clinicLocation.findFirst({
+        where: {
+          id: locationId,
+          active: true,
+        },
+        select: {
+          id: true,
+        },
+      });
 
     if (!location) {
       return Response.json(
-        { success: false, message: "Clinic location not found" },
+        {
+          success: false,
+          message: "Clinic location not found",
+        },
         { status: 404 },
       );
     }
 
-    const overlapping = await prisma.doctorAvailability.findMany({
-      where: {
-        id: { not: availabilityId },
-        dayOfWeek,
-        active: true,
-      },
-      select: {
-        startTime: true,
-        endTime: true,
-        location: {
-          select: {
-            name: true,
+    if (active) {
+      const overlapping =
+        await prisma.doctorAvailability.findMany({
+          where: {
+            id: {
+              not: availabilityId,
+            },
+            dayOfWeek,
+            recurrenceType,
+            ...(recurrenceType === "monthly"
+              ? { weekOfMonth }
+              : {}),
+            active: true,
           },
-        },
-      },
-    });
+          select: {
+            startTime: true,
+            endTime: true,
+            location: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        });
 
-    const conflict = overlapping.find(
-      (item) =>
-        minutes(startTime) < minutes(item.endTime) &&
-        minutes(endTime) > minutes(item.startTime),
-    );
-
-    if (conflict) {
-      return Response.json(
-        {
-          success: false,
-          message:
-            `This time overlaps with ${conflict.location?.name || "another clinic"} ` +
-            `(${conflict.startTime} - ${conflict.endTime})`,
-        },
-        { status: 409 },
+      const conflict = overlapping.find(
+        (item) =>
+          minutes(startTime) < minutes(item.endTime) &&
+          minutes(endTime) > minutes(item.startTime),
       );
+
+      if (conflict) {
+        return Response.json(
+          {
+            success: false,
+            message:
+              `This time overlaps with ` +
+              `${conflict.location?.name || "another clinic"} ` +
+              `(${conflict.startTime}-${conflict.endTime})`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
-    const availability = await prisma.doctorAvailability.update({
-      where: { id: availabilityId },
-      data: {
-        locationId,
-        dayOfWeek,
-        startTime,
-        endTime,
-        slotMinutes,
-        active:
-          body.active === undefined
-            ? current.active
-            : Boolean(body.active),
-        label:
-          body.label === undefined
-            ? current.label
-            : String(body.label || "").trim().slice(0, 120) || null,
-      },
-      include: {
-        location: true,
-      },
-    });
+    const availability =
+      await prisma.doctorAvailability.update({
+        where: {
+          id: availabilityId,
+        },
+        data: {
+          locationId,
+          dayOfWeek,
+          startTime,
+          endTime,
+          recurrenceType,
+          weekOfMonth,
+          slotMinutes,
+          active,
+          label:
+            body.label === undefined
+              ? current.label
+              : String(body.label || "")
+                  .trim()
+                  .slice(0, 120) || null,
+        },
+        include: {
+          location: true,
+        },
+      });
 
     return Response.json({
       success: true,
@@ -210,7 +300,10 @@ export async function PATCH(request, { params }) {
     console.error("UPDATE AVAILABILITY ERROR:", error);
 
     return Response.json(
-      { success: false, message: "Failed to update availability" },
+      {
+        success: false,
+        message: "Failed to update availability",
+      },
       { status: 500 },
     );
   }

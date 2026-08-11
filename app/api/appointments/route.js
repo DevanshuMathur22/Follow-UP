@@ -4,6 +4,7 @@ import prisma from "../../../src/lib/prisma";
 import { readJsonBody } from "../../../src/lib/requestBody";
 import { validObjectId } from "../../../src/lib/inputValidation";
 import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
+import { resolveDoctorSchedule } from "../../../src/lib/doctorSchedule";
 import {
   forbiddenResponse,
   hasPermission,
@@ -57,49 +58,26 @@ function scheduledDate(dateKey, startTime) {
   return new Date(`${dateKey}T${startTime}:00+05:30`);
 }
 
-async function findValidSlot(dateKey, locationId, startTime) {
-  const override =
-    await prisma.doctorScheduleOverride.findUnique({
-      where: {
-        dateKey,
-      },
-      include: {
-        sessions: {
-          where: {
-            active: true,
-            locationId,
-          },
-        },
-      },
+async function findValidSlot(
+  dateKey,
+  locationId,
+  startTime,
+) {
+  const schedule =
+    await resolveDoctorSchedule(dateKey, {
+      locationId,
     });
 
-  if (override?.mode === "unavailable") {
+  if (schedule.mode === "unavailable") {
     return null;
   }
 
-  let sessions = [];
-
-  if (override?.mode === "custom") {
-    sessions = override.sessions || [];
-  } else {
-    const dayOfWeek = new Date(
-      `${dateKey}T00:00:00Z`,
-    ).getUTCDay();
-
-    sessions =
-      await prisma.doctorAvailability.findMany({
-        where: {
-          locationId,
-          dayOfWeek,
-          active: true,
-        },
-      });
-  }
-
-  for (const session of sessions) {
+  for (const session of schedule.sessions) {
     const start = toMinutes(session.startTime);
     const end = toMinutes(session.endTime);
-    const duration = Number(session.slotMinutes || 10);
+    const duration = Number(
+      session.slotMinutes || 10,
+    );
 
     for (
       let current = start;
@@ -111,8 +89,11 @@ async function findValidSlot(dateKey, locationId, startTime) {
       if (candidate === startTime) {
         return {
           startTime: candidate,
-          endTime: fromMinutes(current + duration),
+          endTime: fromMinutes(
+            current + duration,
+          ),
           slotMinutes: duration,
+          mode: schedule.mode,
         };
       }
     }

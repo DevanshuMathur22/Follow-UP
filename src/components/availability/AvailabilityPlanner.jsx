@@ -47,6 +47,8 @@ const mondayFirstDays = [
 ];
 
 const emptyWeekly = {
+  recurrenceType: "weekly",
+  weekOfMonth: "1",
   locationId: "",
   days: ["1"],
   startTime: "10:00",
@@ -63,6 +65,15 @@ function emptySession(locationId = "") {
     slotMinutes: "10",
     label: "",
   };
+}
+
+function ordinal(value) {
+  const number = Number(value);
+  if (number === 1) return "1st";
+  if (number === 2) return "2nd";
+  if (number === 3) return "3rd";
+  if (number === 4) return "4th";
+  return "5th";
 }
 
 function timeLabel(value) {
@@ -188,6 +199,10 @@ export default function AvailabilityPlanner() {
       )
       .sort(
         (a, b) =>
+          String(a.recurrenceType || "weekly").localeCompare(
+            String(b.recurrenceType || "weekly"),
+          ) ||
+          Number(a.weekOfMonth || 0) - Number(b.weekOfMonth || 0) ||
           Number(a.dayOfWeek) - Number(b.dayOfWeek) ||
           String(a.startTime).localeCompare(String(b.startTime)),
       );
@@ -227,11 +242,29 @@ export default function AvailabilityPlanner() {
         mode = "custom";
         sessions = override.sessions || [];
       } else {
-        sessions = availability.filter(
+        const dayOfWeek = localDate.getDay();
+        const weekOfMonth = Math.ceil(day / 7);
+
+        const monthlySessions = availability.filter(
           (item) =>
             item.active &&
-            Number(item.dayOfWeek) === localDate.getDay(),
+            item.recurrenceType === "monthly" &&
+            Number(item.weekOfMonth) === weekOfMonth &&
+            Number(item.dayOfWeek) === dayOfWeek,
         );
+
+        if (monthlySessions.length) {
+          mode = "monthly";
+          sessions = monthlySessions;
+        } else {
+          mode = "weekly";
+          sessions = availability.filter(
+            (item) =>
+              item.active &&
+              (item.recurrenceType || "weekly") === "weekly" &&
+              Number(item.dayOfWeek) === dayOfWeek,
+          );
+        }
       }
 
       cells.push({
@@ -271,6 +304,8 @@ export default function AvailabilityPlanner() {
     setEditingId(item.id);
 
     setWeeklyForm({
+      recurrenceType: item.recurrenceType || "weekly",
+      weekOfMonth: String(item.weekOfMonth || 1),
       locationId: item.locationId,
       days: [String(item.dayOfWeek)],
       startTime: item.startTime,
@@ -302,6 +337,14 @@ export default function AvailabilityPlanner() {
       setWeeklySaving(true);
 
       const payload = {
+        recurrenceType: weeklyForm.recurrenceType,
+        ...(weeklyForm.recurrenceType === "monthly"
+          ? {
+              weekOfMonth: Number(weeklyForm.weekOfMonth),
+            }
+          : {
+              weekOfMonth: null,
+            }),
         locationId: weeklyForm.locationId,
         ...(editingId
           ? {
@@ -325,7 +368,7 @@ export default function AvailabilityPlanner() {
 
         toast.success(
           count > 1
-            ? `${count} weekly schedules added`
+            ? `${count} schedules added`
             : "Schedule added",
         );
       }
@@ -526,7 +569,7 @@ export default function AvailabilityPlanner() {
                 : "text-slate-500 hover:bg-slate-50"
             }`}
           >
-            Weekly Schedule
+            Recurring Schedule
           </button>
 
           <button
@@ -550,13 +593,14 @@ export default function AvailabilityPlanner() {
               <div>
                 <h2 className="font-semibold text-slate-800">
                   {editingId
-                    ? "Edit weekly schedule"
-                    : "Add weekly schedule"}
+                    ? "Edit recurring schedule"
+                    : "Add recurring schedule"}
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Select multiple days when the clinic and timing are
-                  the same.
+                  Use Every Week for regular clinics or Week of Month
+                  for travelling schedules like 1st Thursday Kota and
+                  2nd Thursday Ajmer.
                 </p>
               </div>
 
@@ -575,6 +619,96 @@ export default function AvailabilityPlanner() {
               onSubmit={saveWeekly}
               className="mt-6 grid gap-5 xl:grid-cols-2"
             >
+              <div className="grid gap-4 sm:grid-cols-2 xl:col-span-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Repeat
+                  <select
+                    value={weeklyForm.recurrenceType}
+                    onChange={(event) =>
+                      setWeeklyForm((current) => ({
+                        ...current,
+                        recurrenceType: event.target.value,
+                        days:
+                          event.target.value === "monthly"
+                            ? [current.days[0] || "4"]
+                            : current.days,
+                      }))
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="weekly">Every Week</option>
+                    <option value="monthly">Week of Month</option>
+                  </select>
+                </label>
+
+                {weeklyForm.recurrenceType === "monthly" && (
+                  <label className="text-sm font-medium text-slate-700">
+                    Week of Month
+                    <select
+                      value={weeklyForm.weekOfMonth}
+                      onChange={(event) =>
+                        updateWeekly(
+                          "weekOfMonth",
+                          event.target.value,
+                        )
+                      }
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-indigo-500"
+                    >
+                      <option value="1">1st</option>
+                      <option value="2">2nd</option>
+                      <option value="3">3rd</option>
+                      <option value="4">4th</option>
+                      <option value="5">5th</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700">
+                  Schedule Type
+                </label>
+
+                <select
+                  value={weeklyForm.recurrenceType}
+                  onChange={(event) =>
+                    updateWeekly(
+                      "recurrenceType",
+                      event.target.value,
+                    )
+                  }
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-indigo-500"
+                >
+                  <option value="weekly">Every Week</option>
+                  <option value="monthly">Specific Week</option>
+                </select>
+              </div>
+
+              {weeklyForm.recurrenceType === "monthly" && (
+                <div>
+                  <label className="text-sm font-medium text-slate-700">
+                    Week of Month
+                  </label>
+
+                  <select
+                    value={weeklyForm.weekOfMonth}
+                    onChange={(event) =>
+                      updateWeekly(
+                        "weekOfMonth",
+                        event.target.value,
+                      )
+                    }
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="1">1st Week</option>
+                    <option value="2">2nd Week</option>
+                    <option value="3">3rd Week</option>
+                    <option value="4">4th Week</option>
+                    <option value="5">5th Week</option>
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="text-sm font-medium text-slate-700">
                   Clinic / Hospital
@@ -606,7 +740,10 @@ export default function AvailabilityPlanner() {
 
               <div>
                 <p className="text-sm font-medium text-slate-700">
-                  {editingId ? "Day" : "Days"}
+                  {editingId ||
+                  weeklyForm.recurrenceType === "monthly"
+                    ? "Day"
+                    : "Days"}
                 </p>
 
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -620,7 +757,10 @@ export default function AvailabilityPlanner() {
                         key={day}
                         type="button"
                         onClick={() => {
-                          if (editingId) {
+                          if (
+                            editingId ||
+                            weeklyForm.recurrenceType === "monthly"
+                          ) {
                             updateWeekly("days", [value]);
                             return;
                           }
@@ -744,11 +884,12 @@ export default function AvailabilityPlanner() {
             <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
               <div>
                 <h2 className="font-semibold text-slate-800">
-                  Weekly routine
+                  Recurring routine
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Default schedule used when a date has no override.
+                  Weekly and week-of-month schedules used when a date
+                  has no specific override.
                 </p>
               </div>
 
@@ -789,7 +930,12 @@ export default function AvailabilityPlanner() {
                           Day
                         </p>
                         <p className="mt-1 font-semibold text-slate-800">
-                          {days[item.dayOfWeek]}
+                          {(item.recurrenceType || "weekly") ===
+                          "monthly"
+                            ? `${ordinal(item.weekOfMonth)} ${
+                                days[item.dayOfWeek]
+                              }`
+                            : `Every ${days[item.dayOfWeek]}`}
                         </p>
                       </div>
 
@@ -966,6 +1112,12 @@ export default function AvailabilityPlanner() {
                                 }
                                 className="rounded-lg bg-slate-50 px-2 py-1.5"
                               >
+                                <p className="truncate text-[11px] font-semibold text-indigo-600">
+                                  {(session.recurrenceType || "weekly") === "monthly"
+                                    ? `${ordinal(session.weekOfMonth)} ${days[session.dayOfWeek]}`
+                                    : `Every ${days[session.dayOfWeek]}`}
+                                </p>
+
                                 <p className="truncate text-[11px] font-semibold text-slate-700">
                                   {session.location?.name ||
                                     locations.find(

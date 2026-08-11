@@ -110,22 +110,40 @@ async function validSignature(file, type) {
 }
 
 function serializePrescription(prescription) {
+  const hasAttachment =
+    prescription.attachmentName &&
+    prescription.attachmentPathname;
+
   return {
     id: prescription.id,
     patientId: prescription.patientId,
     patient: prescription.patient || undefined,
+    recordType: prescription.recordType || "uploaded",
     issuedAt: prescription.issuedAt,
     visitDate: prescription.issuedAt,
     doctorName: prescription.doctorName,
     doctor: prescription.doctorName,
     diagnosis: prescription.diagnosis,
     notes: prescription.notes,
-    attachment: {
-      originalName: prescription.attachmentName,
-      contentType: prescription.attachmentType,
-      size: prescription.attachmentSize,
-      url: `/api/prescriptions/${prescription.id}/file`,
-    },
+    complaints: prescription.complaints,
+    historyOfPresentIllness:
+      prescription.historyOfPresentIllness,
+    pastFamilyHistory: prescription.pastFamilyHistory,
+    examination: prescription.examination,
+    medicines: Array.isArray(prescription.medicines)
+      ? prescription.medicines
+      : [],
+    advice: prescription.advice,
+    testsPrescribed: prescription.testsPrescribed,
+    nextVisit: prescription.nextVisit,
+    attachment: hasAttachment
+      ? {
+          originalName: prescription.attachmentName,
+          contentType: prescription.attachmentType,
+          size: prescription.attachmentSize,
+          url: `/api/prescriptions/${prescription.id}/file`,
+        }
+      : null,
     createdAt: prescription.createdAt,
     updatedAt: prescription.updatedAt,
   };
@@ -284,13 +302,28 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          message: "Prescription file is too large",
+          message: "Prescription request is too large",
         },
         { status: 413 },
       );
     }
 
     const formData = await request.formData();
+
+    const recordType =
+      String(formData.get("recordType") || "uploaded")
+        .trim()
+        .toLowerCase();
+
+    if (!["uploaded", "generated"].includes(recordType)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid prescription type",
+        },
+        { status: 400 },
+      );
+    }
 
     const patientId =
       formData.get("patient") ||
@@ -311,7 +344,78 @@ export async function POST(request) {
     );
 
     const notes = cleanText(formData.get("notes"));
+
+    const complaints = cleanText(
+      formData.get("complaints"),
+    );
+
+    const historyOfPresentIllness = cleanText(
+      formData.get("historyOfPresentIllness"),
+    );
+
+    const pastFamilyHistory = cleanText(
+      formData.get("pastFamilyHistory"),
+    );
+
+    const examination = cleanText(
+      formData.get("examination"),
+    );
+
+    const advice = cleanText(
+      formData.get("advice"),
+    );
+
+    const testsPrescribed = cleanText(
+      formData.get("testsPrescribed"),
+    );
+
+    const nextVisit = parseDate(
+      formData.get("nextVisit"),
+    );
+
     const file = formData.get("file");
+
+    let medicines = [];
+
+    try {
+      const rawMedicines =
+        formData.get("medicines") ||
+        formData.get("medications") ||
+        "[]";
+
+      const parsed = JSON.parse(String(rawMedicines));
+
+      if (!Array.isArray(parsed)) {
+        throw new Error("Invalid medicines");
+      }
+
+      medicines = parsed
+        .slice(0, 50)
+        .map((item) => ({
+          medicine: cleanText(
+            item?.medicine ||
+              item?.name ||
+              item?.medicineName,
+          ),
+          dosage: cleanText(item?.dosage),
+          timing: cleanText(item?.timing),
+          frequency: cleanText(item?.frequency),
+          duration: cleanText(item?.duration),
+          composition: cleanText(item?.composition),
+          instructions: cleanText(item?.instructions),
+        }))
+        .filter((item) =>
+          Object.values(item).some(Boolean),
+        );
+    } catch {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid medicine data",
+        },
+        { status: 400 },
+      );
+    }
 
     if (!validObjectId(patientId)) {
       return Response.json(
@@ -333,77 +437,63 @@ export async function POST(request) {
       );
     }
 
-    if (!validText(doctorName, 120)) {
-      return Response.json(
-        {
-          success: false,
-          message: "Doctor name is too long",
-        },
-        { status: 400 },
-      );
+    const textFields = [
+      [doctorName, 120, "Doctor name"],
+      [diagnosis, 2000, "Diagnosis"],
+      [notes, 3000, "Notes"],
+      [complaints, 4000, "Complaints"],
+      [
+        historyOfPresentIllness,
+        6000,
+        "History of present illness",
+      ],
+      [
+        pastFamilyHistory,
+        4000,
+        "Past / family history",
+      ],
+      [examination, 4000, "Examination"],
+      [advice, 4000, "Advice"],
+      [testsPrescribed, 4000, "Tests prescribed"],
+    ];
+
+    for (const [value, maxLength, label] of textFields) {
+      if (!validText(value, maxLength)) {
+        return Response.json(
+          {
+            success: false,
+            message: `${label} is too long`,
+          },
+          { status: 400 },
+        );
+      }
     }
 
-    if (!validText(diagnosis, 2000)) {
-      return Response.json(
-        {
-          success: false,
-          message: "Diagnosis is too long",
-        },
-        { status: 400 },
-      );
-    }
+    for (const medicine of medicines) {
+      const medicineFields = [
+        [medicine.medicine, 300],
+        [medicine.dosage, 200],
+        [medicine.timing, 500],
+        [medicine.frequency, 200],
+        [medicine.duration, 200],
+        [medicine.composition, 500],
+        [medicine.instructions, 700],
+      ];
 
-    if (!validText(notes, 3000)) {
-      return Response.json(
-        {
-          success: false,
-          message: "Notes are too long",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!(file instanceof File) || file.size === 0) {
-      return Response.json(
-        {
-          success: false,
-          message: "Prescription PDF or image is required",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      return Response.json(
-        {
-          success: false,
-          message: "Prescription file must be 4 MB or smaller",
-        },
-        { status: 413 },
-      );
-    }
-
-    const fileType = detectedType(file);
-
-    if (!allowedTypes[fileType]) {
-      return Response.json(
-        {
-          success: false,
-          message:
-            "Only PDF, JPG, PNG and WEBP files are allowed",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (!(await validSignature(file, fileType))) {
-      return Response.json(
-        {
-          success: false,
-          message: "Invalid or corrupted prescription file",
-        },
-        { status: 400 },
-      );
+      if (
+        medicineFields.some(
+          ([value, maxLength]) =>
+            !validText(value, maxLength),
+        )
+      ) {
+        return Response.json(
+          {
+            success: false,
+            message: "Medicine details are too long",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const patient = await prisma.patient.findFirst({
@@ -427,31 +517,100 @@ export async function POST(request) {
       );
     }
 
-    const originalName = safeFileName(file.name);
-    const extension = allowedTypes[fileType];
+    let attachmentData = {
+      attachmentName: null,
+      attachmentType: null,
+      attachmentSize: null,
+      attachmentUrl: null,
+      attachmentPathname: null,
+    };
 
-    const pathname =
-      `prescriptions/${patientId}/` +
-      `${Date.now()}-${randomUUID()}.${extension}`;
+    if (recordType === "uploaded") {
+      if (!(file instanceof File) || file.size === 0) {
+        return Response.json(
+          {
+            success: false,
+            message:
+              "Prescription PDF or image is required",
+          },
+          { status: 400 },
+        );
+      }
 
-    uploadedBlob = await put(pathname, file, {
-      access: "private",
-      addRandomSuffix: false,
-    });
+      if (file.size > MAX_FILE_SIZE) {
+        return Response.json(
+          {
+            success: false,
+            message:
+              "Prescription file must be 4 MB or smaller",
+          },
+          { status: 413 },
+        );
+      }
+
+      const fileType = detectedType(file);
+
+      if (!allowedTypes[fileType]) {
+        return Response.json(
+          {
+            success: false,
+            message:
+              "Only PDF, JPG, PNG and WEBP files are allowed",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (!(await validSignature(file, fileType))) {
+        return Response.json(
+          {
+            success: false,
+            message:
+              "Invalid or corrupted prescription file",
+          },
+          { status: 400 },
+        );
+      }
+
+      const originalName = safeFileName(file.name);
+      const extension = allowedTypes[fileType];
+
+      const pathname =
+        `prescriptions/${patientId}/` +
+        `${Date.now()}-${randomUUID()}.${extension}`;
+
+      uploadedBlob = await put(pathname, file, {
+        access: "private",
+        addRandomSuffix: false,
+      });
+
+      attachmentData = {
+        attachmentName: originalName,
+        attachmentType: fileType,
+        attachmentSize: file.size,
+        attachmentUrl: uploadedBlob.url,
+        attachmentPathname: uploadedBlob.pathname,
+      };
+    }
 
     const prescription =
       await prisma.prescription.create({
         data: {
           patientId,
+          recordType,
           issuedAt,
           doctorName,
           diagnosis,
           notes,
-          attachmentName: originalName,
-          attachmentType: fileType,
-          attachmentSize: file.size,
-          attachmentUrl: uploadedBlob.url,
-          attachmentPathname: uploadedBlob.pathname,
+          complaints,
+          historyOfPresentIllness,
+          pastFamilyHistory,
+          examination,
+          medicines,
+          advice,
+          testsPrescribed,
+          nextVisit,
+          ...attachmentData,
           createdById: sessionUser.id || null,
         },
         include: {
@@ -462,6 +621,7 @@ export async function POST(request) {
               fullName: true,
               mobile: true,
               age: true,
+              gender: true,
               category: true,
               diagnosis: true,
             },
@@ -474,9 +634,18 @@ export async function POST(request) {
     await logActivity({
       actor: sessionUser,
       module: "prescription",
-      action: "uploaded",
-      title: "Prescription uploaded",
-      description: `${patient.fullName} · ${originalName}`,
+      action:
+        recordType === "generated"
+          ? "created"
+          : "uploaded",
+      title:
+        recordType === "generated"
+          ? "Prescription created"
+          : "Prescription uploaded",
+      description:
+        recordType === "generated"
+          ? `${patient.fullName} · Doctor prescription`
+          : `${patient.fullName} · ${attachmentData.attachmentName}`,
       patientId,
       recordId: prescription.id,
       relatedPath: `/patients/${patientId}`,

@@ -141,16 +141,29 @@ model Prescription {
   patientId String  @db.ObjectId
   patient   Patient @relation(fields: [patientId], references: [id])
 
+  recordType String @default("uploaded")
+
   issuedAt   DateTime
   doctorName String?
   diagnosis  String?
   notes      String?
 
-  attachmentName     String
-  attachmentType     String
-  attachmentSize     Int
-  attachmentUrl      String
-  attachmentPathname String
+  complaints              String?
+  historyOfPresentIllness String?
+  pastFamilyHistory       String?
+  examination             String?
+
+  medicines Json?
+
+  advice          String?
+  testsPrescribed String?
+  nextVisit       DateTime?
+
+  attachmentName     String?
+  attachmentType     String?
+  attachmentSize     Int?
+  attachmentUrl      String?
+  attachmentPathname String?
 
   createdById String? @db.ObjectId
 
@@ -158,7 +171,9 @@ model Prescription {
   updatedAt DateTime @updatedAt
 
   @@index([patientId])
+  @@index([recordType])
   @@index([issuedAt])
+  @@index([nextVisit])
   @@index([createdAt])
   @@map("prescriptions")
 }
@@ -197,6 +212,9 @@ model DoctorAvailability {
   startTime String
   endTime   String
 
+  recurrenceType String @default("weekly")
+  weekOfMonth    Int?
+
   slotMinutes Int     @default(10)
   active      Boolean @default(true)
   label       String?
@@ -206,6 +224,8 @@ model DoctorAvailability {
 
   @@index([locationId])
   @@index([dayOfWeek])
+  @@index([recurrenceType])
+  @@index([weekOfMonth])
   @@index([active])
   @@map("doctorAvailability")
 }

@@ -47,6 +47,37 @@ function normalizeDays(body) {
   ].sort((a, b) => a - b);
 }
 
+function normalizeRecurrence(body) {
+  const recurrenceType =
+    String(body.recurrenceType || "weekly").toLowerCase();
+
+  const weekOfMonth =
+    recurrenceType === "monthly"
+      ? Number(body.weekOfMonth)
+      : null;
+
+  return {
+    recurrenceType,
+    weekOfMonth,
+  };
+}
+
+function ordinal(value) {
+  if (value === 1) return "1st";
+  if (value === 2) return "2nd";
+  if (value === 3) return "3rd";
+  if (value === 4) return "4th";
+  return "5th";
+}
+
+function scheduleLabel(recurrenceType, weekOfMonth, dayOfWeek) {
+  if (recurrenceType === "monthly") {
+    return `${ordinal(weekOfMonth)} ${dayNames[dayOfWeek]}`;
+  }
+
+  return dayNames[dayOfWeek];
+}
+
 export async function GET(request) {
   try {
     const user = await getSessionUser();
@@ -75,6 +106,8 @@ export async function GET(request) {
           location: true,
         },
         orderBy: [
+          { recurrenceType: "asc" },
+          { weekOfMonth: "asc" },
           { dayOfWeek: "asc" },
           { startTime: "asc" },
         ],
@@ -127,12 +160,44 @@ export async function POST(request) {
 
     const locationId = body.locationId;
     const days = normalizeDays(body);
+
+    const {
+      recurrenceType,
+      weekOfMonth,
+    } = normalizeRecurrence(body);
+
     const startTime = String(body.startTime || "");
     const endTime = String(body.endTime || "");
     const slotMinutes = Number(body.slotMinutes || 10);
+
     const label = String(body.label || "")
       .trim()
       .slice(0, 120);
+
+    if (!["weekly", "monthly"].includes(recurrenceType)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid recurrence type",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      recurrenceType === "monthly" &&
+      (!Number.isInteger(weekOfMonth) ||
+        weekOfMonth < 1 ||
+        weekOfMonth > 5)
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message: "Select 1st, 2nd, 3rd, 4th or 5th week",
+        },
+        { status: 400 },
+      );
+    }
 
     if (!validObjectId(locationId)) {
       return Response.json(
@@ -216,6 +281,10 @@ export async function POST(request) {
           dayOfWeek: {
             in: days,
           },
+          recurrenceType,
+          ...(recurrenceType === "monthly"
+            ? { weekOfMonth }
+            : {}),
           active: true,
         },
         include: {
@@ -238,7 +307,11 @@ export async function POST(request) {
         {
           success: false,
           message:
-            `${dayNames[conflict.dayOfWeek]} ${startTime}-${endTime} overlaps with ` +
+            `${scheduleLabel(
+              recurrenceType,
+              weekOfMonth,
+              conflict.dayOfWeek,
+            )} ${startTime}-${endTime} overlaps with ` +
             `${conflict.location?.name || "another clinic"} ` +
             `(${conflict.startTime}-${conflict.endTime})`,
         },
@@ -254,6 +327,8 @@ export async function POST(request) {
             dayOfWeek,
             startTime,
             endTime,
+            recurrenceType,
+            weekOfMonth,
             slotMinutes,
             label: label || null,
             active: true,

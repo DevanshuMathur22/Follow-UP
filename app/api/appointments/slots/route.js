@@ -1,6 +1,7 @@
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 import { validObjectId } from "../../../../src/lib/inputValidation";
+import { resolveDoctorSchedule } from "../../../../src/lib/doctorSchedule";
 
 function validDateKey(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) {
@@ -109,76 +110,27 @@ export async function GET(request) {
       );
     }
 
-    const override =
-      await prisma.doctorScheduleOverride.findUnique({
-        where: {
-          dateKey,
-        },
-        include: {
-          sessions: {
-            where: {
-              active: true,
-            },
-            include: {
-              location: true,
-            },
-            orderBy: {
-              startTime: "asc",
-            },
-          },
-        },
+    const schedule =
+      await resolveDoctorSchedule(dateKey, {
+        locationId,
       });
 
-    if (override?.mode === "unavailable") {
+    const {
+      mode,
+      note,
+      sessions,
+    } = schedule;
+
+    if (mode === "unavailable") {
       return Response.json({
         success: true,
         dateKey,
         mode: "unavailable",
-        note: override.note || null,
+        note: note || null,
         slots: [],
         bookedCount: 0,
         availableCount: 0,
       });
-    }
-
-    let sessions = [];
-    let mode = "weekly";
-
-    if (override?.mode === "custom") {
-      mode = "custom";
-
-      sessions = (override.sessions || []).filter(
-        (item) =>
-          item.location?.active !== false &&
-          (!locationId || item.locationId === locationId),
-      );
-    } else {
-      const dayOfWeek = new Date(
-        `${dateKey}T00:00:00Z`,
-      ).getUTCDay();
-
-      sessions =
-        await prisma.doctorAvailability.findMany({
-          where: {
-            dayOfWeek,
-            active: true,
-            ...(locationId
-              ? {
-                  locationId,
-                }
-              : {}),
-          },
-          include: {
-            location: true,
-          },
-          orderBy: {
-            startTime: "asc",
-          },
-        });
-
-      sessions = sessions.filter(
-        (item) => item.location?.active !== false,
-      );
     }
 
     const allSlots = sessions.flatMap((session) =>
@@ -254,7 +206,7 @@ export async function GET(request) {
       success: true,
       dateKey,
       mode,
-      note: override?.note || null,
+      note: note || null,
       slots: filteredSlots,
       availableCount: filteredSlots.filter(
         (slot) => slot.available,
