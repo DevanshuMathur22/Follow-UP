@@ -567,6 +567,14 @@ export default function PatientTable({
                         </p>
 
                         <p className="mt-1 text-xs text-slate-400">
+                          {patient.dob
+                            ? `DOB ${formatDate(
+                                patient.dob,
+                              )}`
+                            : "DOB not recorded"}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-400">
                           {[patient.city, patient.state]
                             .filter(Boolean)
                             .join(", ") ||

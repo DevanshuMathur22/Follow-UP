@@ -1,6 +1,8 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2,
+  CalendarDays,
   Clock3,
   TriangleAlert,
   UsersRound,
@@ -10,8 +12,10 @@ import CallQueue from "../components/dashboard/CallQueue";
 import RecentActivity from "../components/dashboard/RecentActivity";
 import RecentPatients from "../components/dashboard/RecentPatients";
 import StatCard from "../components/dashboard/StatCard";
+import { getCurrentUser } from "../services/authService";
 import {
   getActivityLogs,
+  getAppointments,
   getFollowUpStatus,
   getFollowUps,
   getPatients,
@@ -26,7 +30,10 @@ function localDateKey(value) {
     return source;
   }
 
-  const date = value instanceof Date ? value : new Date(value);
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
 
   if (Number.isNaN(date.getTime())) {
     return source.slice(0, 10);
@@ -39,101 +46,187 @@ function localDateKey(value) {
   ].join("-");
 }
 
-function isToday(value, now) {
-  return localDateKey(value) === localDateKey(now);
-}
-
-function normalizedStatus(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[-_]/g, " ")
-    .trim();
+function appointmentClosed(status) {
+  return [
+    "Completed",
+    "Cancelled",
+    "No-show",
+  ].includes(String(status || ""));
 }
 
 export default function Dashboard() {
   const [data, setData] = useState({
     patients: [],
     followUps: [],
+    appointments: [],
     activities: [],
   });
-  const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(() => new Date());
-  const [doctorName, setDoctorName] = useState("Doctor");
 
-  useEffect(() => {
-    Promise.allSettled([
+  const [loading, setLoading] =
+    useState(true);
+
+  const [now, setNow] = useState(
+    () => new Date(),
+  );
+
+  const [doctorName, setDoctorName] =
+    useState("Doctor");
+
+  async function loadDashboard({
+    silent = false,
+  } = {}) {
+    if (!silent) {
+      setLoading(true);
+    }
+
+    const today = localDateKey(new Date());
+
+    const [
+      patientsResult,
+      followUpsResult,
+      appointmentsResult,
+      activitiesResult,
+    ] = await Promise.allSettled([
       getPatients(),
       getFollowUps(),
-      getActivityLogs({ limit: 20 }),
-    ])
-      .then(([patientsResult, followUpsResult, activitiesResult]) => {
-        setData({
-          patients:
-            patientsResult.status === "fulfilled"
-              ? patientsResult.value
-              : [],
-          followUps:
-            followUpsResult.status === "fulfilled"
-              ? followUpsResult.value
-              : [],
-          activities:
-            activitiesResult.status === "fulfilled"
-              ? activitiesResult.value
-              : [],
-        });
+      getAppointments({
+        date: today,
+      }),
+      getActivityLogs({
+        limit: 20,
+      }),
+    ]);
+
+    setData({
+      patients:
+        patientsResult.status === "fulfilled"
+          ? patientsResult.value
+          : [],
+      followUps:
+        followUpsResult.status === "fulfilled"
+          ? followUpsResult.value
+          : [],
+      appointments:
+        appointmentsResult.status ===
+        "fulfilled"
+          ? appointmentsResult.value
+          : [],
+      activities:
+        activitiesResult.status ===
+        "fulfilled"
+          ? activitiesResult.value
+          : [],
+    });
+
+    if (!silent) {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadDashboard();
+
+    void getCurrentUser()
+      .then((user) => {
+        const name = String(
+          user?.name || "",
+        )
+          .replace(/^Dr\.?\s*/i, "")
+          .trim();
+
+        if (name) {
+          setDoctorName(name);
+        }
       })
-      .finally(() => setLoading(false));
+      .catch(() => {});
+
+    const refresh = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        void loadDashboard({
+          silent: true,
+        });
+      }
+    };
+
+    const interval =
+      window.setInterval(
+        refresh,
+        30_000,
+      );
+
+    window.addEventListener(
+      "focus",
+      refresh,
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      refresh,
+    );
+
+    return () => {
+      window.clearInterval(interval);
+
+      window.removeEventListener(
+        "focus",
+        refresh,
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        refresh,
+      );
+    };
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(new Date());
-    }, 60_000);
-
-    try {
-      const user = JSON.parse(
-        window.localStorage.getItem("caretrack-user") || "{}",
+    const timer =
+      window.setInterval(
+        () => setNow(new Date()),
+        60_000,
       );
 
-      if (user.name) {
-        setDoctorName(
-          user.name.replace(/^Dr\.?\s*/i, ""),
-        );
-      }
-    } catch {}
-
-    return () => window.clearInterval(timer);
+    return () =>
+      window.clearInterval(timer);
   }, []);
 
   const liveFollowUps = useMemo(
     () =>
-      data.followUps.map((followUp) => ({
-        ...followUp,
-        status: getFollowUpStatus(
-          followUp.status,
-          followUp.dueDate,
-          now,
-        ),
-      })),
+      data.followUps.map(
+        (followUp) => ({
+          ...followUp,
+          status: getFollowUpStatus(
+            followUp.status,
+            followUp.dueDate,
+            now,
+          ),
+        }),
+      ),
     [data.followUps, now],
   );
 
-  const todayFollowUps = liveFollowUps.filter(
-    (followUp) => followUp.status === "Today",
-  ).length;
+  const todayFollowUps =
+    liveFollowUps.filter(
+      (followUp) =>
+        followUp.status === "Today",
+    ).length;
 
-  const overdueFollowUps = liveFollowUps.filter(
-    (followUp) => followUp.status === "Overdue",
-  ).length;
+  const overdueFollowUps =
+    liveFollowUps.filter(
+      (followUp) =>
+        followUp.status === "Overdue",
+    ).length;
 
-  const completedToday = data.followUps.filter(
-    (followUp) =>
-      normalizedStatus(followUp.status) === "completed" &&
-      isToday(
-        followUp.completedAt || followUp.updatedAt,
-        now,
-      ),
-  ).length;
+  const activeTodayAppointments =
+    data.appointments.filter(
+      (appointment) =>
+        !appointmentClosed(
+          appointment.status,
+        ),
+    ).length;
 
   const stats = [
     {
@@ -142,6 +235,13 @@ export default function Dashboard() {
       detail: "Active patient records",
       icon: UsersRound,
       tone: "indigo",
+    },
+    {
+      title: "Today's Appointments",
+      value: data.appointments.length,
+      detail: `${activeTodayAppointments} active`,
+      icon: CalendarDays,
+      tone: "violet",
     },
     {
       title: "Today's Follow-ups",
@@ -153,16 +253,9 @@ export default function Dashboard() {
     {
       title: "Overdue Follow-ups",
       value: overdueFollowUps,
-      detail: "Need attention",
+      detail: "Needs attention",
       icon: TriangleAlert,
       tone: "amber",
-    },
-    {
-      title: "Completed Today",
-      value: completedToday,
-      detail: "Follow-ups completed",
-      icon: CheckCircle2,
-      tone: "emerald",
     },
   ];
 
@@ -180,7 +273,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold tracking-[0.16em] text-indigo-600">
-            FOLLOW-UP OVERVIEW
+            TODAY
           </p>
 
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-800">
@@ -188,23 +281,30 @@ export default function Dashboard() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Patients and follow-ups requiring attention.
+            Appointments and follow-ups
+            requiring attention today.
           </p>
         </div>
 
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-500 shadow-sm">
-          {new Intl.DateTimeFormat("en-IN", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          }).format(now)}
+          {new Intl.DateTimeFormat(
+            "en-IN",
+            {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            },
+          ).format(now)}
         </p>
       </div>
 
-      <section className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} />
+          <StatCard
+            key={stat.title}
+            {...stat}
+          />
         ))}
       </section>
 

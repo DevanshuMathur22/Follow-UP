@@ -1,7 +1,5 @@
-"use client";
-
-import Reports from "../../src/components/reports/Reports";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <Reports />;
+  redirect("/patients");
 }

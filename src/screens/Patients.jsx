@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import {
+  Archive,
+  Plus,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import PatientTable from "../components/patients/PatientTable";
@@ -135,7 +138,7 @@ export default function Patients() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Search and manage patient records and follow-ups.
+            Search, import and manage patient records safely.
           </p>
         </div>
 
@@ -144,6 +147,16 @@ export default function Patients() {
             patients={patients}
             onImported={loadPatients}
           />
+
+          {canArchive && (
+            <Link
+              href="/patients/archived"
+              className="flex w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-800"
+            >
+              <Archive size={17} />
+              Archived
+            </Link>
+          )}
 
           <Link
             href="/patients/add"

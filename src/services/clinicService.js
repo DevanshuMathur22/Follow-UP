@@ -581,6 +581,22 @@ export async function updateAppointment(appointmentId, updates) {
   );
 }
 
+export async function getMedicineCatalog(
+  params = {},
+) {
+  const result = unwrap(
+    await api.get("/medicines", {
+      params,
+    }),
+  );
+
+  return Array.isArray(
+    result?.medicines,
+  )
+    ? result.medicines
+    : [];
+}
+
 export async function createPrescription(input) {
   const formData = new FormData();
   const {

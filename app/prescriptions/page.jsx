@@ -1,7 +1,5 @@
-"use client";
-
-import Prescriptions from "../../src/components/prescriptions/Prescriptions";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <Prescriptions />;
+  redirect("/patients");
 }

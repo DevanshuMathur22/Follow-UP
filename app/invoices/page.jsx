@@ -1,7 +1,5 @@
-"use client";
-
-import Invoices from "../../src/components/invoices/Invoice";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <Invoices />;
+  redirect("/dashboard");
 }

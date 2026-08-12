@@ -669,9 +669,11 @@ export default function Appointments() {
   }
 
   function openForm() {
+    const today = localDateKey();
+
     setForm({
       ...emptyForm,
-      dateKey: date,
+      dateKey: date && date >= today ? date : today,
     });
     setPatientQuery("");
     setShowForm(true);
@@ -1134,7 +1136,7 @@ export default function Appointments() {
               className="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-violet-700"
             >
               <ExternalLink size={15} />
-              Open Patient
+              Continue Consultation
             </Link>
           </div>
 
@@ -1295,15 +1297,19 @@ export default function Appointments() {
               </div>
 
               <label className="text-sm font-medium text-slate-700">
-                Date
+                Appointment Date
                 <input
                   type="date"
+                  min={localDateKey()}
                   value={form.dateKey}
                   onChange={(event) =>
                     updateForm("dateKey", event.target.value)
                   }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 outline-none focus:border-indigo-400"
                 />
+                <span className="mt-1.5 block text-xs font-normal text-slate-400">
+                  Staff can book appointments for today or any future available date.
+                </span>
               </label>
 
               <label className="text-sm font-medium text-slate-700">
@@ -1312,8 +1318,7 @@ export default function Appointments() {
                   value={form.city}
                   disabled={
                     !form.dateKey ||
-                    dateScheduleLoading ||
-                    !formCities.length
+                    dateScheduleLoading
                   }
                   onChange={(event) =>
                     setForm((current) => ({
@@ -1332,13 +1337,21 @@ export default function Appointments() {
                         ? "Select date first"
                         : formCities.length
                           ? "Select available city"
-                          : "Doctor unavailable"}
+                          : "No clinic scheduled — choose another date"}
                   </option>
 
                   {formCities.map((city) => (
                     <option key={city}>{city}</option>
                   ))}
                 </select>
+
+                {form.dateKey &&
+                  !dateScheduleLoading &&
+                  !formCities.length && (
+                    <span className="mt-2 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                      Doctor has no clinic availability on this date. Select another future date to continue booking.
+                    </span>
+                  )}
               </label>
 
               <label className="text-sm font-medium text-slate-700">
@@ -1683,7 +1696,7 @@ export default function Appointments() {
       <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b p-5 sm:p-6">
           <h2 className="font-semibold text-slate-800">
-            Today&apos;s Patients
+            Appointment Queue
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
@@ -1761,16 +1774,89 @@ export default function Appointments() {
                           {appointment.status}
                         </span>
 
-                        <div className="flex lg:justify-end">
-                          <Link
-                            href={`/patients/${appointment.patientId}?appointment=${appointment.id}&status=${encodeURIComponent(
-                              appointment.status || "Booked",
-                            )}`}
-                            className="inline-flex w-fit items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
-                          >
-                            <ExternalLink size={15} />
-                            Open Patient
-                          </Link>
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          {[
+                            "Booked",
+                            "Confirmed",
+                          ].includes(
+                            appointment.status,
+                          ) && (
+                            <button
+                              type="button"
+                              disabled={
+                                actionLoadingId ===
+                                appointment.id
+                              }
+                              onClick={() =>
+                                void changeStatus(
+                                  appointment,
+                                  "Checked-in",
+                                )
+                              }
+                              className="inline-flex h-9 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              {actionLoadingId ===
+                              appointment.id
+                                ? "Saving..."
+                                : "Check-in"}
+                            </button>
+                          )}
+
+                          {appointment.status ===
+                            "Checked-in" && (
+                            <button
+                              type="button"
+                              disabled={
+                                actionLoadingId ===
+                                appointment.id
+                              }
+                              onClick={() =>
+                                void changeStatus(
+                                  appointment,
+                                  "Waiting",
+                                )
+                              }
+                              className="inline-flex h-9 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              {actionLoadingId ===
+                              appointment.id
+                                ? "Saving..."
+                                : "Move to Waiting"}
+                            </button>
+                          )}
+
+                          {[
+                            "Waiting",
+                            "With Doctor",
+                          ].includes(
+                            appointment.status,
+                          ) ? (
+                            <Link
+                              href={`/patients/${appointment.patientId}?appointment=${appointment.id}&status=${encodeURIComponent(
+                                appointment.status ||
+                                  "Booked",
+                              )}`}
+                              className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                            >
+                              <ExternalLink
+                                size={14}
+                              />
+                              {appointment.status ===
+                              "With Doctor"
+                                ? "Continue Consultation"
+                                : "Start Consultation"}
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/patients/${appointment.patientId}`}
+                              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-indigo-700"
+                            >
+                              <ExternalLink
+                                size={14}
+                              />
+                              Open Patient
+                            </Link>
+                          )}
                         </div>
                       </article>
                     );
@@ -1797,11 +1883,11 @@ export default function Appointments() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-semibold text-slate-800">
-                Today&apos;s History
+                Visit History
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                {dateLabel(date)} · {historyAppointments.length} completed / closed visit{historyAppointments.length === 1 ? "" : "s"}
+                {dateLabel(date)} · {historyAppointments.length} closed visit{historyAppointments.length === 1 ? "" : "s"}
               </p>
             </div>
 
@@ -1876,11 +1962,11 @@ export default function Appointments() {
             />
 
             <p className="mt-3 text-sm font-semibold text-slate-700">
-              No completed visits yet
+              No closed visits yet
             </p>
 
             <p className="mt-1 text-xs text-slate-500">
-              Patients will move here after their visit is completed.
+              Completed, cancelled and no-show appointments will appear here.
             </p>
           </div>
         )}

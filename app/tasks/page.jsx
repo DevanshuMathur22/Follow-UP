@@ -1,7 +1,5 @@
-"use client";
-
-import Tasks from "../../src/components/tasks/Tasks";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <Tasks />;
+  redirect("/follow-ups");
 }

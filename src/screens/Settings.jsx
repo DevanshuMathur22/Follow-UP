@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArchiveRestore,
-  BellRing,
   Building2,
   CalendarDays,
   ChevronRight,
   ClipboardList,
   DatabaseBackup,
-  Download,
   FileText,
   HardDriveUpload,
   History,
@@ -16,7 +14,6 @@ import {
   LockKeyhole,
   Mail,
   PhoneCall,
-  ReceiptText,
   Save,
   ShieldCheck,
   UserRound,
@@ -25,19 +22,7 @@ import {
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import { changePassword } from "../services/authService";
-import {
-  getActivityLogs,
-  getAppointments,
-  getCategories,
-  getFollowUps,
-  getInvoices,
-  getNotifications,
-  getPatients,
-  getPayments,
-  getPrescriptions,
-  getReports,
-  getTasks,
-} from "../services/clinicService";
+
 import { formatDate } from "../lib/format";
 
 const STORAGE_KEY = "caretrack-settings";
@@ -95,11 +80,30 @@ const defaults = {
 const inputClass = "mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100";
 
 const settingsTabs = [
-  { id: "clinic", label: "Clinic & doctor", description: "Profile, prescription, billing", icon: Building2 },
-  { id: "workflow", label: "Workflows", description: "Appointments and follow-ups", icon: CalendarDays },
-  { id: "notifications", label: "Notifications", description: "Alerts and reminders", icon: BellRing },
-  { id: "data", label: "Data & records", description: "Backup, export, archived records", icon: DatabaseBackup },
-  { id: "security", label: "Security", description: "Access and privacy", icon: ShieldCheck },
+  {
+    id: "clinic",
+    label: "Clinic & doctor",
+    description: "Workspace profile",
+    icon: Building2,
+  },
+  {
+    id: "workflow",
+    label: "Workflows",
+    description: "Appointments and follow-ups",
+    icon: CalendarDays,
+  },
+  {
+    id: "data",
+    label: "Data & records",
+    description: "Backup and recovery",
+    icon: DatabaseBackup,
+  },
+  {
+    id: "security",
+    label: "Security",
+    description: "Account and privacy",
+    icon: ShieldCheck,
+  },
 ];
 
 function Toggle({ checked, onChange, label, disabled = false }) {
@@ -229,17 +233,7 @@ export default function Settings() {
     persistSettings(settings);
   }
 
-  async function handleExport({ backup = false } = {}) {
-    if (
-      !backup &&
-      !settings.allowDataExport
-    ) {
-      toast.error(
-        "Data export is disabled in Security settings",
-      );
-      return;
-    }
-
+  async function handleExport() {
     try {
       setExporting(true);
 
@@ -301,27 +295,18 @@ export default function Settings() {
 
       URL.revokeObjectURL(fileUrl);
 
-      const exportedAt =
-        new Date();
+      const nextSettings = {
+        ...settings,
+        lastBackupAt:
+          new Date().toISOString(),
+      };
 
-      if (backup) {
-        const nextSettings = {
-          ...settings,
-          lastBackupAt:
-            exportedAt.toISOString(),
-        };
+      setSettings(nextSettings);
 
-        setSettings(nextSettings);
-
-        persistSettings(
-          nextSettings,
-          "Database backup downloaded",
-        );
-      } else {
-        toast.success(
-          "Database export downloaded",
-        );
-      }
+      persistSettings(
+        nextSettings,
+        "Database backup downloaded",
+      );
     } catch (error) {
       toast.error(
         error?.message ||
@@ -362,45 +347,167 @@ export default function Settings() {
   function renderClinicSettings() {
     return (
       <div className="space-y-5">
-        <SectionCard icon={Building2} tone="bg-indigo-50 text-indigo-600" title="Clinic profile" description="The clinic identity used throughout your workspace.">
+        <SectionCard
+          icon={Building2}
+          tone="bg-indigo-50 text-indigo-600"
+          title="Clinic profile"
+          description="Basic workspace identity saved for this clinic device."
+        >
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Clinic name"><input name="clinicName" value={settings.clinicName} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Clinic phone"><input name="clinicPhone" value={settings.clinicPhone} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Clinic email"><input type="email" name="clinicEmail" value={settings.clinicEmail} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Time zone"><select name="clinicTimezone" value={settings.clinicTimezone} onChange={updateSetting} className={inputClass}><option value="Asia/Kolkata">India Standard Time (IST)</option><option value="Asia/Dubai">Gulf Standard Time (GST)</option><option value="Asia/Singapore">Singapore Time (SGT)</option></select></Field>
-            <Field label="Clinic address" className="md:col-span-2"><textarea rows="3" name="clinicAddress" value={settings.clinicAddress} onChange={updateSetting} className={`${inputClass} resize-none`} /></Field>
+            <Field label="Clinic name">
+              <input
+                name="clinicName"
+                value={settings.clinicName}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Clinic phone">
+              <input
+                name="clinicPhone"
+                value={settings.clinicPhone}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Clinic email">
+              <input
+                type="email"
+                name="clinicEmail"
+                value={settings.clinicEmail}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Time zone">
+              <select
+                name="clinicTimezone"
+                value={settings.clinicTimezone}
+                onChange={updateSetting}
+                className={inputClass}
+              >
+                <option value="Asia/Kolkata">
+                  India Standard Time (IST)
+                </option>
+              </select>
+            </Field>
+
+            <Field
+              label="Clinic address"
+              className="md:col-span-2"
+            >
+              <textarea
+                rows="3"
+                name="clinicAddress"
+                value={settings.clinicAddress}
+                onChange={updateSetting}
+                className={`${inputClass} resize-none`}
+              />
+            </Field>
           </div>
         </SectionCard>
 
-        <SectionCard icon={UserRound} tone="bg-violet-50 text-violet-600" title="Doctor details" description="Keep the clinician identity ready for prescriptions and clinic records.">
+        <SectionCard
+          icon={UserRound}
+          tone="bg-violet-50 text-violet-600"
+          title="Doctor details"
+          description="Keep the doctor contact and registration details together."
+        >
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Doctor name"><input name="doctorName" value={settings.doctorName} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Specialization"><input name="specialization" value={settings.specialization} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Doctor phone"><input name="doctorPhone" value={settings.doctorPhone} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Doctor email"><input type="email" name="doctorEmail" value={settings.doctorEmail} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Medical registration number" className="md:col-span-2" hint="Shown on generated prescriptions when enabled below."><input name="doctorRegistration" value={settings.doctorRegistration} onChange={updateSetting} placeholder="e.g. MCI-12345" className={inputClass} /></Field>
+            <Field label="Doctor name">
+              <input
+                name="doctorName"
+                value={settings.doctorName}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Specialization">
+              <input
+                name="specialization"
+                value={settings.specialization}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Doctor phone">
+              <input
+                name="doctorPhone"
+                value={settings.doctorPhone}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Doctor email">
+              <input
+                type="email"
+                name="doctorEmail"
+                value={settings.doctorEmail}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Medical registration number"
+              className="md:col-span-2"
+            >
+              <input
+                name="doctorRegistration"
+                value={settings.doctorRegistration}
+                onChange={updateSetting}
+                placeholder="Registration number"
+                className={inputClass}
+              />
+            </Field>
           </div>
         </SectionCard>
 
-        <SectionCard icon={FileText} tone="bg-cyan-50 text-cyan-600" title="Prescription settings" description="Default text and follow-up behaviour for clinical prescriptions.">
+        <SectionCard
+          icon={FileText}
+          tone="bg-cyan-50 text-cyan-600"
+          title="Prescription defaults"
+          description="Simple local defaults for prescription preparation."
+        >
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Default prescription template"><input name="prescriptionTemplate" value={settings.prescriptionTemplate} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Default follow-up after (days)"><input min="1" type="number" name="defaultFollowUpDays" value={settings.defaultFollowUpDays} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Prescription footer" className="md:col-span-2"><textarea rows="3" name="prescriptionFooter" value={settings.prescriptionFooter} onChange={updateSetting} className={`${inputClass} resize-none`} /></Field>
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <ToggleRow title="Show registration number" description="Include the doctor registration field in prescription output." checked={settings.showDoctorRegistration} onChange={() => toggleSetting("showDoctorRegistration")} />
-            <ToggleRow title="Require prescription attachment" description="Prompt for a PDF or image attachment while recording a prescription." checked={settings.requirePrescriptionAttachment} onChange={() => toggleSetting("requirePrescriptionAttachment")} />
-          </div>
-        </SectionCard>
+            <Field label="Default prescription label">
+              <input
+                name="prescriptionTemplate"
+                value={settings.prescriptionTemplate}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
 
-        <SectionCard icon={ReceiptText} tone="bg-emerald-50 text-emerald-600" title="Invoice settings" description="Set billing defaults for new invoices and receipts.">
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Invoice prefix"><input name="invoicePrefix" value={settings.invoicePrefix} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Currency"><select name="invoiceCurrency" value={settings.invoiceCurrency} onChange={updateSetting} className={inputClass}><option value="INR">INR — Indian Rupee</option><option value="USD">USD — US Dollar</option><option value="AED">AED — UAE Dirham</option></select></Field>
-            <Field label="Default tax (%)"><input min="0" type="number" name="defaultTax" value={settings.defaultTax} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Default payment due (days)"><input min="0" type="number" name="invoiceDueDays" value={settings.invoiceDueDays} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Invoice footer" className="md:col-span-2"><textarea rows="3" name="invoiceFooter" value={settings.invoiceFooter} onChange={updateSetting} className={`${inputClass} resize-none`} /></Field>
+            <Field label="Default follow-up after (days)">
+              <input
+                min="1"
+                type="number"
+                name="defaultFollowUpDays"
+                value={settings.defaultFollowUpDays}
+                onChange={updateSetting}
+                className={inputClass}
+              />
+            </Field>
+
+            <Field
+              label="Prescription footer"
+              className="md:col-span-2"
+            >
+              <textarea
+                rows="3"
+                name="prescriptionFooter"
+                value={settings.prescriptionFooter}
+                onChange={updateSetting}
+                className={`${inputClass} resize-none`}
+              />
+            </Field>
           </div>
         </SectionCard>
       </div>
@@ -410,56 +517,80 @@ export default function Settings() {
   function renderWorkflowSettings() {
     return (
       <div className="space-y-5">
-        <SectionCard icon={CalendarDays} tone="bg-blue-50 text-blue-600" title="Appointment settings" description="Set the default clinic schedule and booking safeguards.">
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-            <Field label="Default duration (min)"><input min="5" step="5" type="number" name="appointmentDuration" value={settings.appointmentDuration} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Clinic opens"><input type="time" name="appointmentStartHour" value={settings.appointmentStartHour} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Clinic closes"><input type="time" name="appointmentEndHour" value={settings.appointmentEndHour} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Default location"><input name="defaultClinicLocation" value={settings.defaultClinicLocation} onChange={updateSetting} className={inputClass} /></Field>
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <ToggleRow title="Prevent overlapping appointments" description="Keep a default rule against double-booking a time slot." checked={settings.preventAppointmentOverlap} onChange={() => toggleSetting("preventAppointmentOverlap")} />
-            <ToggleRow title="Appointment confirmations" description="Keep appointment confirmation reminders enabled in this workspace." checked={settings.appointmentConfirmation} onChange={() => toggleSetting("appointmentConfirmation")} />
+        <SectionCard
+          icon={CalendarDays}
+          tone="bg-blue-50 text-blue-600"
+          title="Appointment workflow"
+          description="Doctor availability and appointment slots are managed by the live scheduling system."
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <ResourceLink
+              href="/appointments"
+              icon={CalendarDays}
+              tone="bg-blue-50 text-blue-600"
+              title="Appointments"
+              description="Open the booking queue, check-in patients and start consultations."
+              action="Open"
+            />
+
+            <ResourceLink
+              href="/availability"
+              icon={CalendarDays}
+              tone="bg-indigo-50 text-indigo-600"
+              title="Doctor availability"
+              description="Manage recurring schedules, locations and date exceptions."
+              action="Manage"
+            />
           </div>
         </SectionCard>
 
-        <SectionCard icon={PhoneCall} tone="bg-amber-50 text-amber-600" title="Follow-up settings" description="Control the default workflow for calls, reminders, and category scheduling.">
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Default follow-up after (days)"><input min="1" type="number" name="followUpDefaultDays" value={settings.followUpDefaultDays} onChange={updateSetting} className={inputClass} /></Field>
-            <Field label="Reminder lead time (minutes)"><input min="0" step="5" type="number" name="reminderLeadMinutes" value={settings.reminderLeadMinutes} onChange={updateSetting} className={inputClass} /></Field>
-          </div>
-          <div className="mt-5 grid gap-3">
-            <ToggleRow title="Enable live follow-up reminders" description="Show due-today and overdue follow-up reminders in the dashboard notification flow." checked={settings.reminders} onChange={() => toggleSetting("reminders")} />
-            <ToggleRow title="Follow-up notifications" description="Keep patient call and visit notifications enabled for the current workspace." checked={settings.followUpNotifications} onChange={() => toggleSetting("followUpNotifications")} />
-            <ToggleRow title="Auto-schedule category follow-ups" description="Use each patient category’s follow-up interval when a category rule is applied." checked={settings.followUpAutoSchedule} onChange={() => toggleSetting("followUpAutoSchedule")} />
+        <SectionCard
+          icon={PhoneCall}
+          tone="bg-amber-50 text-amber-600"
+          title="Follow-up reminders"
+          description="Control the live follow-up reminder indicator on this device."
+        >
+          <ToggleRow
+            title="Live follow-up reminders"
+            description="Show due-today and overdue follow-up attention counts in the workspace."
+            checked={settings.reminders}
+            onChange={() =>
+              toggleSetting("reminders")
+            }
+          />
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <ResourceLink
+              href="/follow-ups"
+              icon={PhoneCall}
+              tone="bg-amber-50 text-amber-600"
+              title="Follow-up queue"
+              description="Call, complete, reschedule or cancel patient follow-ups."
+              action="Open"
+            />
+
+            <ResourceLink
+              href="/categories"
+              icon={ClipboardList}
+              tone="bg-indigo-50 text-indigo-600"
+              title="Patient categories"
+              description="Manage the categories used across patient records."
+              action="Manage"
+            />
           </div>
         </SectionCard>
 
-        <section className="rounded-2xl border border-indigo-100 bg-indigo-50 p-5 sm:p-6">
-          <div className="flex items-start gap-3"><span className="rounded-xl bg-white p-2.5 text-indigo-600 shadow-sm"><ClipboardList size={20} /></span><div><h2 className="text-base font-semibold text-indigo-950">Follow-up first workflow</h2><p className="mt-1 text-sm text-indigo-700">Categories define recurring follow-up intervals; schedule exceptions directly from the follow-up queue.</p><div className="mt-4 flex flex-wrap gap-3"><Link href="/categories" className="rounded-xl bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700">Manage categories</Link><Link href="/follow-ups" className="rounded-xl border border-indigo-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100">Open follow-ups</Link></div></div></div>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm font-semibold text-slate-800">
+            Scheduling safeguards
+          </p>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Slot conflicts and appointment updates are enforced by the server.
+            Use the Availability planner for schedule changes instead of local
+            time settings.
+          </p>
         </section>
-      </div>
-    );
-  }
-
-  function renderNotificationSettings() {
-    return (
-      <div className="space-y-5">
-        <SectionCard icon={BellRing} tone="bg-amber-50 text-amber-600" title="Notification preferences" description="Choose which clinic events should surface in the notification panel.">
-          <div className="grid gap-3">
-            <ToggleRow title="Appointment alerts" description="Show due, rescheduled, and cancelled appointment updates." checked={settings.notificationAppointments} onChange={() => toggleSetting("notificationAppointments")} />
-            <ToggleRow title="Payment alerts" description="Show received and pending payment updates." checked={settings.notificationPayments} onChange={() => toggleSetting("notificationPayments")} />
-            <ToggleRow title="Report upload alerts" description="Show newly uploaded patient report updates." checked={settings.notificationReports} onChange={() => toggleSetting("notificationReports")} />
-            <ToggleRow title="Task alerts" description="Show overdue and assigned clinic task updates." checked={settings.notificationTasks} onChange={() => toggleSetting("notificationTasks")} />
-            <ToggleRow title="Medicine renewal alerts" description="Show prescription refill and renewal reminders when available." checked={settings.notificationMedicineRenewals} onChange={() => toggleSetting("notificationMedicineRenewals")} />
-            <ToggleRow title="Browser notifications" description="Use browser permission for system notifications when supported." checked={settings.desktopNotifications} onChange={() => toggleSetting("desktopNotifications")} />
-          </div>
-        </SectionCard>
-
-        <SectionCard icon={PhoneCall} tone="bg-indigo-50 text-indigo-600" title="Follow-up reminder status" description="Live reminders use your saved follow-up preference after you save this page.">
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-4"><p className="text-sm font-semibold text-indigo-900">{settings.reminders ? "Reminders are enabled" : "Reminders are paused"}</p><p className="mt-1 text-xs text-indigo-700">The dashboard checks active follow-ups against the real-time clock and surfaces today’s or overdue records.</p></div>
-          <div className="mt-4"><Link href="/follow-ups" className="inline-flex rounded-xl border border-indigo-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100">Review reminder queue</Link></div>
-        </SectionCard>
       </div>
     );
   }
@@ -467,27 +598,96 @@ export default function Settings() {
   function renderDataSettings() {
     return (
       <div className="space-y-5">
-        <SectionCard icon={DatabaseBackup} tone="bg-violet-50 text-violet-600" title="Database backup" description="Download a protected copy of the important database records in this workspace.">
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field label="Backup frequency"><select name="backupFrequency" value={settings.backupFrequency} onChange={updateSetting} disabled={!settings.autoBackup} className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-50`}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></Field>
-            <Field label="Keep backups for (days)"><input min="1" type="number" name="backupRetentionDays" value={settings.backupRetentionDays} onChange={updateSetting} disabled={!settings.autoBackup} className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-50`} /></Field>
+        <SectionCard
+          icon={DatabaseBackup}
+          tone="bg-violet-50 text-violet-600"
+          title="Database backup"
+          description="Download a server-generated JSON backup of important clinic database records."
+        >
+          <div className="rounded-xl border border-violet-100 bg-violet-50 p-4">
+            <p className="text-sm font-semibold text-violet-950">
+              Manual protected backup
+            </p>
+
+            <p className="mt-2 text-xs leading-5 text-violet-800">
+              The backup includes database records, including archived
+              patients. Uploaded prescription file metadata is included, but
+              the actual private PDF or image file contents are not bundled
+              inside this JSON file.
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold text-violet-900">
+                  Last downloaded backup
+                </p>
+
+                <p className="mt-1 text-xs text-violet-700">
+                  {settings.lastBackupAt
+                    ? formatDate(
+                        settings.lastBackupAt,
+                        {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        },
+                      )
+                    : "No database backup has been downloaded from this device yet."}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={exporting}
+                onClick={() =>
+                  void handleExport()
+                }
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <HardDriveUpload size={17} />
+                {exporting
+                  ? "Preparing..."
+                  : "Download backup"}
+              </button>
+            </div>
           </div>
-          <div className="mt-5"><ToggleRow title="Automatic backup preference" description="Stores the preferred schedule. Automatic off-device backups will be configured separately before production." checked={settings.autoBackup} onChange={() => toggleSetting("autoBackup")} /></div>
-          <div className="mt-5 flex flex-col gap-4 rounded-xl border border-violet-100 bg-violet-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-violet-900">Last manual backup</p><p className="mt-1 text-xs text-violet-700">{settings.lastBackupAt ? formatDate(settings.lastBackupAt, { hour: "numeric", minute: "2-digit" }) : "No manual database backup has been downloaded yet."}</p></div><button type="button" disabled={exporting} onClick={() => void handleExport({ backup: true })} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"><HardDriveUpload size={17} />{exporting ? "Preparing…" : "Download backup"}</button></div>
+
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4">
+            <p className="text-xs font-semibold text-amber-900">
+              Automatic backup is not enabled here
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-amber-800">
+              Production automatic database and private-file backups must be
+              configured separately at the infrastructure level. This page
+              does not claim to schedule them.
+            </p>
+          </div>
         </SectionCard>
 
-        <SectionCard icon={Download} tone="bg-blue-50 text-blue-600" title="Data export" description="Download a server-generated copy of the database records for controlled offline storage.">
+        <SectionCard
+          icon={ArchiveRestore}
+          tone="bg-slate-100 text-slate-600"
+          title="Recovery & audit"
+          description="Review archived patient records and recorded workspace activity."
+        >
           <div className="grid gap-3 md:grid-cols-2">
-            <ToggleRow title="Allow manual data exports" description="Let this signed-in browser download clinic record exports." checked={settings.allowDataExport} onChange={() => toggleSetting("allowDataExport")} />
-            <ToggleRow title="Include archived records" description="Archived patients are always included in protected database exports." checked={settings.includeArchivedInExports} onChange={() => toggleSetting("includeArchivedInExports")} />
-          </div>
-          <div className="mt-5 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-blue-800">Exports are downloaded to this device. Do not save them on a shared or unsecured computer.</p><button type="button" disabled={exporting || !settings.allowDataExport} onClick={() => void handleExport()} className="shrink-0 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Preparing…" : "Download export"}</button></div>
-        </SectionCard>
+            <ResourceLink
+              href="/patients/archived"
+              icon={ArchiveRestore}
+              tone="bg-slate-100 text-slate-600"
+              title="Archived patients"
+              description="Review and restore patients that were moved out of the active list."
+              action="Open"
+            />
 
-        <SectionCard icon={ArchiveRestore} tone="bg-slate-100 text-slate-600" title="Archived records & audit" description="Review the available records that have been archived and the actions recorded in the workspace.">
-          <div className="grid gap-3 md:grid-cols-2">
-            <ResourceLink href="/tasks" icon={ArchiveRestore} tone="bg-slate-100 text-slate-600" title="Archived task records" description="Review, restore, or keep archived clinic tasks." action="Open" />
-            <ResourceLink href="/activity" icon={History} tone="bg-indigo-50 text-indigo-600" title="Activity logs" description="Search workflow, follow-up, report, payment, and settings activity." action="Open" />
+            <ResourceLink
+              href="/activity"
+              icon={History}
+              tone="bg-indigo-50 text-indigo-600"
+              title="Activity logs"
+              description="Review recorded patient, appointment, follow-up, prescription and backup activity."
+              action="Open"
+            />
           </div>
         </SectionCard>
       </div>
@@ -497,20 +697,91 @@ export default function Settings() {
   function renderSecuritySettings() {
     return (
       <div className="space-y-5">
-        <SectionCard icon={ShieldCheck} tone="bg-emerald-50 text-emerald-600" title="Security settings" description="Choose local safety preferences for this clinic workspace.">
-          <div className="grid gap-3">
-            <ToggleRow title="Activity log" description="Keep activity logging enabled where the workspace supports it." checked={settings.activityLog} onChange={() => toggleSetting("activityLog")} />
-            <ToggleRow title="Mask patient mobile numbers" description="Use a privacy-focused display preference in future patient views." checked={settings.maskPatientMobile} onChange={() => toggleSetting("maskPatientMobile")} />
-            <ToggleRow title="Confirm before archiving" description="Keep an extra confirmation step before moving supported records to archive." checked={settings.confirmBeforeArchive} onChange={() => toggleSetting("confirmBeforeArchive")} />
+        <SectionCard
+          icon={ShieldCheck}
+          tone="bg-emerald-50 text-emerald-600"
+          title="Workspace protection"
+          description="Security controls that are enforced by the application."
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {[
+              [
+                "Authenticated sessions",
+                "Protected workspace pages require a valid signed-in session.",
+              ],
+              [
+                "Role permissions",
+                "Doctor, staff and administrator actions are checked by server permissions.",
+              ],
+              [
+                "Patient archive & restore",
+                "Patient removal uses recoverable archive records instead of normal hard deletion.",
+              ],
+              [
+                "Activity records",
+                "Supported clinical and administrative actions are recorded for review.",
+              ],
+            ].map(([title, description]) => (
+              <div
+                key={title}
+                className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4"
+              >
+                <p className="text-sm font-semibold text-emerald-950">
+                  {title}
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-emerald-800">
+                  {description}
+                </p>
+              </div>
+            ))}
           </div>
-          <div className="mt-5 max-w-sm"><Field label="Automatic sign-out after (minutes)" hint="Saved as a workspace preference; session enforcement is configured by the server."><input min="5" type="number" name="inactivityMinutes" value={settings.inactivityMinutes} onChange={updateSetting} className={inputClass} /></Field></div>
         </SectionCard>
 
-        <SectionCard icon={KeyRound} tone="bg-rose-50 text-rose-600" title="Account access" description="Change the password for the signed-in clinic account.">
-          <div className="flex flex-col gap-4 rounded-xl border border-rose-100 bg-rose-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-rose-950">{sessionUser?.name || settings.doctorName}</p><p className="mt-1 flex items-center gap-1 text-xs text-rose-700"><Mail size={13} />{sessionUser?.email || settings.doctorEmail}</p></div><button type="button" onClick={() => setShowPasswordForm(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"><LockKeyhole size={17} />Change password</button></div>
+        <SectionCard
+          icon={KeyRound}
+          tone="bg-rose-50 text-rose-600"
+          title="Account access"
+          description="Change the password for the signed-in clinic account."
+        >
+          <div className="flex flex-col gap-4 rounded-xl border border-rose-100 bg-rose-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-rose-950">
+                {sessionUser?.name ||
+                  settings.doctorName}
+              </p>
+
+              <p className="mt-1 flex items-center gap-1 text-xs text-rose-700">
+                <Mail size={13} />
+                {sessionUser?.email ||
+                  settings.doctorEmail}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setShowPasswordForm(true)
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+            >
+              <LockKeyhole size={17} />
+              Change password
+            </button>
+          </div>
         </SectionCard>
 
-        <section className="rounded-2xl border border-amber-100 bg-amber-50 p-5"><p className="text-sm font-semibold text-amber-900">Privacy reminder</p><p className="mt-1 text-sm leading-6 text-amber-800">Patient information should only be accessed on a secured device. Use the export and backup controls only for approved clinic data handling.</p></section>
+        <section className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+          <p className="text-sm font-semibold text-amber-900">
+            Privacy reminder
+          </p>
+
+          <p className="mt-1 text-sm leading-6 text-amber-800">
+            Patient data and downloaded backups should only be handled on
+            approved secured devices. Do not keep exported clinic data on a
+            shared or unsecured computer.
+          </p>
+        </section>
       </div>
     );
   }
@@ -518,7 +789,6 @@ export default function Settings() {
   const panelByTab = {
     clinic: renderClinicSettings(),
     workflow: renderWorkflowSettings(),
-    notifications: renderNotificationSettings(),
     data: renderDataSettings(),
     security: renderSecuritySettings(),
   };
@@ -527,9 +797,9 @@ export default function Settings() {
     <DashboardLayout>
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold tracking-[0.16em] text-slate-600">SYSTEM CONFIGURATION</p>
+          <p className="text-sm font-semibold tracking-[0.16em] text-slate-600">WORKSPACE SETTINGS</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-800">Settings</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">Manage clinic identity, follow-up workflows, notification preferences, records, and security controls.</p>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">Manage clinic profile, workflow preferences, protected backups and account security.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {dirty && <span className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">Unsaved changes</span>}

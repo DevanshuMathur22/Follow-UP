@@ -420,6 +420,12 @@ export async function POST(request) {
               item?.name ||
               item?.medicineName,
           ),
+          strength: cleanText(
+            item?.strength,
+          ),
+          unit: cleanText(
+            item?.unit,
+          ),
           dosage: cleanText(item?.dosage),
           timing: cleanText(item?.timing),
           frequency: cleanText(item?.frequency),
@@ -495,6 +501,8 @@ export async function POST(request) {
     for (const medicine of medicines) {
       const medicineFields = [
         [medicine.medicine, 300],
+        [medicine.strength, 100],
+        [medicine.unit, 50],
         [medicine.dosage, 200],
         [medicine.timing, 500],
         [medicine.frequency, 200],
@@ -695,6 +703,117 @@ export async function POST(request) {
     }
 
     uploadedBlob = null;
+
+    if (
+      recordType === "generated" &&
+      medicines.length
+    ) {
+      const catalogMedicines =
+        new Map();
+
+      for (const item of medicines) {
+        const name = String(
+          item.medicine || "",
+        )
+          .trim()
+          .replace(/\s+/g, " ");
+
+        if (!name) continue;
+
+        const strength = String(
+          item.strength || "",
+        )
+          .trim()
+          .replace(/\s+/g, " ");
+
+        const unit = String(
+          item.unit || "",
+        )
+          .trim()
+          .replace(/\s+/g, " ");
+
+        const key = [
+          name.toLowerCase(),
+          strength.toLowerCase(),
+          unit.toLowerCase(),
+        ].join("|");
+
+        if (!catalogMedicines.has(key)) {
+          catalogMedicines.set(
+            key,
+            {
+              key,
+              name,
+              strength,
+              unit,
+              searchText: [
+                name,
+                strength,
+                unit,
+              ]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase(),
+            },
+          );
+        }
+      }
+
+      const now = new Date();
+
+      const results =
+        await Promise.allSettled(
+          Array.from(
+            catalogMedicines.values(),
+          ).map((item) =>
+            prisma.medicineCatalog.upsert({
+              where: {
+                key: item.key,
+              },
+              create: {
+                ...item,
+                usageCount: 1,
+                firstUsedAt: now,
+                lastUsedAt: now,
+                createdById:
+                  sessionUser.id ||
+                  null,
+              },
+              update: {
+                name: item.name,
+                strength:
+                  item.strength,
+                unit: item.unit,
+                searchText:
+                  item.searchText,
+                usageCount: {
+                  increment: 1,
+                },
+                lastUsedAt: now,
+              },
+            }),
+          ),
+        );
+
+      const failedCatalogWrites =
+        results.filter(
+          (result) =>
+            result.status ===
+            "rejected",
+        );
+
+      if (
+        failedCatalogWrites.length
+      ) {
+        console.error(
+          "MEDICINE CATALOG UPDATE ERROR:",
+          failedCatalogWrites.map(
+            (result) =>
+              result.reason,
+          ),
+        );
+      }
+    }
 
     await logActivity({
       actor: sessionUser,

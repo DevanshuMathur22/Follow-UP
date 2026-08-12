@@ -30,21 +30,12 @@ export async function GET() {
       return forbiddenResponse();
     }
 
-    await logActivity({
-      actor: user,
-      module: "security",
-      action: "backup_exported",
-      title: "Database backup exported",
-      description:
-        "A protected database backup copy was downloaded",
-      relatedPath: "/settings",
-    });
-
     const [
       patients,
       categories,
       followUps,
       prescriptions,
+      medicineCatalog,
       locations,
       availabilities,
       scheduleOverrides,
@@ -73,6 +64,16 @@ export async function GET() {
         orderBy: {
           createdAt: "asc",
         },
+      }),
+      prisma.medicineCatalog.findMany({
+        orderBy: [
+          {
+            lastUsedAt: "desc",
+          },
+          {
+            name: "asc",
+          },
+        ],
       }),
       prisma.clinicLocation.findMany({
         orderBy: {
@@ -116,6 +117,16 @@ export async function GET() {
       }),
     ]);
 
+    await logActivity({
+      actor: user,
+      module: "security",
+      action: "backup_exported",
+      title: "Database backup exported",
+      description:
+        "A protected database backup copy was downloaded",
+      relatedPath: "/settings",
+    });
+
     const exportedAt = new Date();
 
     const collections = {
@@ -123,6 +134,7 @@ export async function GET() {
       categories,
       followUps,
       prescriptions,
+      medicineCatalog,
       locations,
       availabilities,
       scheduleOverrides,
@@ -144,7 +156,7 @@ export async function GET() {
 
     const backup = {
       format: "caretrack-database-backup",
-      version: 1,
+      version: 2,
       exportedAt:
         exportedAt.toISOString(),
       exportedBy: {

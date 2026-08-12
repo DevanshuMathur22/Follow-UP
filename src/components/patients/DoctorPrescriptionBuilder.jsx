@@ -15,7 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { createPrescription } from "../../services/clinicService";
+import {
+  createPrescription,
+  getMedicineCatalog,
+} from "../../services/clinicService";
 import { medicineMaster } from "../../data/medicineMaster";
 
 const DOSE_OPTIONS = [
@@ -36,6 +39,9 @@ const UNIT_OPTIONS = [
   "g",
   "ml",
   "IU",
+  "Units",
+  "mg/mL",
+  "mcg/mL",
   "%",
 ];
 
@@ -670,6 +676,40 @@ export default function DoctorPrescriptionBuilder({
     setActiveMedicineIndex,
   ] = useState(null);
 
+  const [
+    catalogMedicines,
+    setCatalogMedicines,
+  ] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+
+    void getMedicineCatalog({
+      limit: 500,
+    })
+      .then((items) => {
+        if (!active) return;
+
+        setCatalogMedicines(
+          items.map((item) => ({
+            name: item.name,
+            strength:
+              item.strength || "",
+            unit:
+              item.unit || "",
+            saved: true,
+            usageCount:
+              item.usageCount || 0,
+          })),
+        );
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     try {
       const saved =
@@ -801,6 +841,7 @@ export default function DoctorPrescriptionBuilder({
 
     const all = [
       ...previous,
+      ...catalogMedicines,
       ...medicineMaster,
     ];
 
@@ -822,9 +863,20 @@ export default function DoctorPrescriptionBuilder({
 
         seen.add(key);
 
-        return String(item.name)
-          .toLowerCase()
-          .includes(query);
+        const searchable = [
+          item.name,
+          item.strength,
+          item.unit,
+          item.category,
+          ...(Array.isArray(item.aliases)
+            ? item.aliases
+            : []),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchable.includes(query);
       })
       .slice(0, 10);
   }
@@ -1248,11 +1300,15 @@ export default function DoctorPrescriptionBuilder({
                                         }
                                       </p>
 
-                                      {suggestion.previous && (
+                                      {suggestion.previous ? (
                                         <p className="mt-0.5 text-[10px] font-semibold text-emerald-600">
                                           Previous medicine
                                         </p>
-                                      )}
+                                      ) : suggestion.saved ? (
+                                        <p className="mt-0.5 text-[10px] font-semibold text-indigo-600">
+                                          Saved medicine
+                                        </p>
+                                      ) : null}
                                     </div>
 
                                     {(suggestion.strength ||

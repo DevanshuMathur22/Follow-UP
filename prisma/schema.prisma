@@ -190,6 +190,31 @@ model PrescriptionSaveRequest {
   @@map("prescription_save_requests")
 }
 
+model MedicineCatalog {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  key        String @unique
+  name       String
+  strength   String @default("")
+  unit       String @default("")
+  searchText String
+
+  usageCount Int @default(1)
+
+  firstUsedAt DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+
+  createdById String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([lastUsedAt])
+  @@index([usageCount])
+  @@map("medicineCatalog")
+}
+
 model ClinicLocation {
   id String @id @default(auto()) @map("_id") @db.ObjectId
 
