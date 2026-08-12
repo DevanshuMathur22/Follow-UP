@@ -27,6 +27,7 @@ import {
   getFollowUps,
   getPatient,
   getPrescriptions,
+  getAppointment,
   updateAppointment,
   updatePatient,
 } from "../services/clinicService";
@@ -60,6 +61,10 @@ export default function PatientProfile() {
     initialVisitStatus,
   );
   const [visitSaving, setVisitSaving] = useState(false);
+  const [
+    appointmentUpdatedAt,
+    setAppointmentUpdatedAt,
+  ] = useState("");
 
   const loadProfile = useCallback(async () => {
     if (!patientId) return;
@@ -148,41 +153,69 @@ export default function PatientProfile() {
   }, [initialVisitStatus, appointmentId]);
 
   useEffect(() => {
-    if (
-      !appointmentId ||
-      !initialVisitStatus ||
-      [
-        "With Doctor",
-        "Completed",
-        "Cancelled",
-        "No-show",
-      ].includes(initialVisitStatus)
-    ) {
-      return;
-    }
+    if (!appointmentId) return;
 
     let active = true;
 
-    async function startVisit() {
+    async function syncAppointment() {
       try {
-        const updated =
-          await updateAppointment(
+        const current =
+          await getAppointment(
             appointmentId,
-            {
-              status: "With Doctor",
-            },
           );
 
-        if (active) {
+        if (!active) return;
+
+        setVisitStatus(
+          current.status ||
+            initialVisitStatus ||
+            "",
+        );
+
+        setAppointmentUpdatedAt(
+          current.updatedAt || "",
+        );
+
+        if (
+          ![
+            "With Doctor",
+            "Completed",
+            "Cancelled",
+            "No-show",
+          ].includes(current.status)
+        ) {
+          const updated =
+            await updateAppointment(
+              appointmentId,
+              {
+                status: "With Doctor",
+                expectedUpdatedAt:
+                  current.updatedAt,
+              },
+            );
+
+          if (!active) return;
+
           setVisitStatus(
-            updated?.status ||
+            updated.status ||
               "With Doctor",
           );
+
+          setAppointmentUpdatedAt(
+            updated.updatedAt || "",
+          );
         }
-      } catch {}
+      } catch (error) {
+        if (!active) return;
+
+        toast.error(
+          error.response?.data?.message ||
+            "Unable to start consultation",
+        );
+      }
     }
 
-    void startVisit();
+    void syncAppointment();
 
     return () => {
       active = false;
@@ -198,11 +231,30 @@ export default function PatientProfile() {
     try {
       setVisitSaving(true);
 
-      await updateAppointment(appointmentId, {
-        status,
-      });
+      if (!appointmentUpdatedAt) {
+        toast.error(
+          "Appointment is still loading. Try again.",
+        );
+        return;
+      }
 
-      setVisitStatus(status);
+      const updated =
+        await updateAppointment(
+          appointmentId,
+          {
+            status,
+            expectedUpdatedAt:
+              appointmentUpdatedAt,
+          },
+        );
+
+      setVisitStatus(
+        updated?.status || status,
+      );
+
+      setAppointmentUpdatedAt(
+        updated?.updatedAt || "",
+      );
 
       if (status === "With Doctor") {
         toast.success("Consultation started");
@@ -228,7 +280,11 @@ export default function PatientProfile() {
 
       const updated = await updatePatient(
         patientId,
-        values,
+        {
+          ...values,
+          expectedUpdatedAt:
+            patient.updatedAt,
+        },
       );
 
       setPatient(updated);
@@ -306,7 +362,7 @@ export default function PatientProfile() {
           saving={visitSaving}
           status={visitStatus || "With Doctor"}
           onDone={() =>
-            void changeVisitStatus("Completed")
+            changeVisitStatus("Completed")
           }
         />
       ) : editing ? (

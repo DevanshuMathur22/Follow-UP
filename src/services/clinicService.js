@@ -193,6 +193,10 @@ function normalizeAppointment(item, patientMap = new Map()) {
       item.locationName ||
       item.clinic ||
       "Main Clinic",
+    updatedAt:
+      item.updatedAt ||
+      related.updatedAt ||
+      "",
   };
 }
 
@@ -542,6 +546,19 @@ export async function getAppointmentSearchContext(fromDate) {
 export async function createAppointment(input) {
   const result = unwrap(
     await api.post("/appointments", input),
+  );
+
+  return normalizeAppointment(
+    result?.appointment || result,
+    new Map(),
+  );
+}
+
+export async function getAppointment(appointmentId) {
+  const result = unwrap(
+    await api.get(
+      `/appointments/${appointmentId}`,
+    ),
   );
 
   return normalizeAppointment(

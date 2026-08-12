@@ -101,7 +101,7 @@ function appointmentMatches(appointment, query, status, clinic) {
   ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery));
   return matchesQuery
     && (status === "All" || appointmentStatus === status)
-    && (clinic === "All" || (appointment.clinic || "Main Clinic") === clinic);
+    && (clinic === "All" || (appointment.clinic || "Location") === clinic);
 }
 
 function EventActions({ appointment, status, onReschedule, onCancel, onStatusChange, actionLoadingId }) {
@@ -174,7 +174,7 @@ export default function AppointmentCalendar({
   }, [initialPatientId]);
 
   const clinics = useMemo(
-    () => ["All", ...new Set(appointments.map((item) => item.clinic || "Main Clinic").filter(Boolean))],
+    () => ["All", ...new Set(appointments.map((item) => item.clinic || "Location").filter(Boolean))],
     [appointments],
   );
 
@@ -232,7 +232,7 @@ export default function AppointmentCalendar({
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="text-base font-semibold text-slate-800">Appointment calendar</h2>
-            <p className="mt-1 text-sm text-slate-500">Search, filter, and update clinic visits from one view.</p>
+            <p className="mt-1 text-sm text-slate-500">Search, filter, and update appointments from one view.</p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[660px]">
@@ -242,7 +242,7 @@ export default function AppointmentCalendar({
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search patient, type, clinic…"
+                placeholder="Search patient, type, location…"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
               />
             </div>
@@ -260,13 +260,13 @@ export default function AppointmentCalendar({
             </label>
 
             <label className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-600">
-              <span className="sr-only">Filter appointment clinic</span>
+              <span className="sr-only">Filter appointment location</span>
               <select
                 value={clinicFilter}
                 onChange={(event) => setClinicFilter(event.target.value)}
                 className="w-full bg-transparent outline-none"
               >
-                {clinics.map((clinic) => <option key={clinic}>{clinic === "All" ? "All clinics" : clinic}</option>)}
+                {clinics.map((clinic) => <option key={clinic}>{clinic === "All" ? "All locations" : clinic}</option>)}
               </select>
             </label>
           </div>
@@ -385,14 +385,14 @@ export default function AppointmentCalendar({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold">{appointmentTitle(appointment)}</p>
-                        <p className="mt-1 text-xs opacity-80">{appointment.type || "Clinic appointment"}</p>
+                        <p className="mt-1 text-xs opacity-80">{appointment.type || "Appointment"}</p>
                       </div>
                       <span className={`w-fit rounded-lg px-2.5 py-1.5 text-xs font-semibold ${statusTone(status)}`}>{status}</span>
                     </div>
 
                     <div className="mt-4 flex flex-col gap-1.5 text-xs opacity-85">
                       <p className="flex items-center gap-1.5"><Clock3 size={13} />{appointment.time || "Time not recorded"}</p>
-                      <p className="flex items-center gap-1.5"><MapPin size={13} />{appointment.clinic || "Main Clinic"}</p>
+                      <p className="flex items-center gap-1.5"><MapPin size={13} />{appointment.clinic || "Location"}</p>
                       {appointment.patientId && <p className="flex items-center gap-1.5"><UserRound size={13} />Patient reference available</p>}
                     </div>
 
@@ -423,7 +423,7 @@ export default function AppointmentCalendar({
               <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
                 <div className="rounded-2xl bg-slate-50 p-4 text-slate-400"><CalendarDays size={26} /></div>
                 <p className="mt-4 text-sm font-semibold text-slate-600">No appointments on this date</p>
-                <p className="mt-1 text-xs leading-5 text-slate-400">Choose another date, clear filters, or schedule a clinic visit.</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Choose another date, clear filters, or schedule an appointment.</p>
               </div>
             )}
           </div>

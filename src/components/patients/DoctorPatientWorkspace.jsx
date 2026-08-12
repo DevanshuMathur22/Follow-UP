@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import {
-  CheckCircle2,
   Stethoscope,
 } from "lucide-react";
 import PatientPrescriptions from "./PatientPrescriptions";
@@ -19,9 +17,6 @@ export default function DoctorPatientWorkspace({
   saving,
   status,
 }) {
-  const [prescriptionSaved, setPrescriptionSaved] =
-    useState(false);
-
   const closed = [
     "Completed",
     "Cancelled",
@@ -105,42 +100,14 @@ export default function DoctorPatientWorkspace({
           prescriptions={prescriptions}
           onRefresh={onRefresh}
           doctorMode
-          onPrescriptionSaved={() =>
-            setPrescriptionSaved(true)
-          }
+          onPrescriptionSaved={async () => {
+            if (!closed && onDone) {
+              await onDone();
+            }
+          }}
         />
       </section>
 
-      {!closed && prescriptionSaved && (
-        <section className="flex flex-col gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-emerald-700">
-              <CheckCircle2 size={18} />
-
-              <p className="text-sm font-semibold">
-                Prescription saved
-              </p>
-            </div>
-
-            <p className="mt-1 text-xs text-emerald-700/70">
-              Complete this consultation and return to today&apos;s queue.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onDone}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-          >
-            <CheckCircle2 size={16} />
-
-            {saving
-              ? "Completing..."
-              : "Done & Next Patient"}
-          </button>
-        </section>
-      )}
     </div>
   );
 }

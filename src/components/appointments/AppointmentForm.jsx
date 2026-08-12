@@ -485,7 +485,7 @@ export default function Appointments() {
 
     activeAppointments.forEach((item) => {
       const locationName =
-        item.location?.name || item.locationName || "Clinic";
+        item.location?.name || item.locationName || "Location";
 
       const city = item.location?.city || "";
 
@@ -769,7 +769,7 @@ export default function Appointments() {
     }
 
     if (!form.locationId) {
-      toast.error("Select hospital or clinic");
+      toast.error("Select location");
       return;
     }
 
@@ -816,7 +816,14 @@ export default function Appointments() {
     try {
       setActionLoadingId(appointment.id);
 
-      await updateAppointment(appointment.id, { status });
+      await updateAppointment(
+        appointment.id,
+        {
+          status,
+          expectedUpdatedAt:
+            appointment.updatedAt,
+        },
+      );
       await loadAppointments(date);
 
       toast.success(`Appointment marked ${status}`);
@@ -1029,7 +1036,7 @@ export default function Appointments() {
               className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-600 outline-none focus:border-indigo-400"
             >
               <option value="All">
-                All clinics / hospitals
+                All locations
               </option>
 
               {locations.map((location) => (
@@ -1292,7 +1299,7 @@ export default function Appointments() {
               </label>
 
               <label className="text-sm font-medium text-slate-700">
-                Hospital / Clinic
+                Location
                 <select
                   value={form.locationId}
                   disabled={!form.city || !formLocations.length}
@@ -1547,7 +1554,7 @@ export default function Appointments() {
                 </div>
               ) : !form.locationId ? (
                 <p className="mt-3 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-400">
-                  Select city and hospital / clinic to see appointment times.
+                  Select city and location to see appointment times.
                 </p>
               ) : (
                 <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
@@ -1792,7 +1799,7 @@ export default function Appointments() {
 
                 <div>
                   <p className="text-sm font-medium text-slate-700">
-                    {appointment.location?.name || "Clinic"}
+                    {appointment.location?.name || "Location"}
                   </p>
 
                   <p className="mt-1 text-xs text-slate-500">

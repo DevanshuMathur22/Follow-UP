@@ -58,7 +58,7 @@ function generateSessionSlots(session, dateKey, source) {
       ),
       dateKey,
       locationId: session.locationId,
-      locationName: session.location?.name || "Clinic",
+      locationName: session.location?.name || "Location",
       city: session.location?.city || "",
       startTime,
       endTime,
@@ -104,7 +104,7 @@ export async function GET(request) {
       return Response.json(
         {
           success: false,
-          message: "Invalid clinic location",
+          message: "Invalid location",
         },
         { status: 400 },
       );

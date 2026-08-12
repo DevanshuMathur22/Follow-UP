@@ -238,6 +238,55 @@ export async function PATCH(request, { params }) {
       );
     }
 
+    const expectedUpdatedAt =
+      String(body.expectedUpdatedAt || "").trim();
+
+    if (!expectedUpdatedAt) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "Patient record is not fully loaded. Refresh before saving.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const expectedDate =
+      new Date(expectedUpdatedAt);
+
+    if (
+      Number.isNaN(
+        expectedDate.getTime(),
+      )
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "Invalid patient version",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      expectedDate.getTime() !==
+      new Date(
+        existingPatient.updatedAt,
+      ).getTime()
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "This patient was changed by another user. Refresh before saving your changes.",
+          patient: existingPatient,
+        },
+        { status: 409 },
+      );
+    }
+
     const categoryChanged =
       updates.category !== undefined &&
       String(updates.category).toLowerCase() !==
@@ -280,12 +329,28 @@ export async function PATCH(request, { params }) {
       });
     }
 
-    await prisma.patient.update({
-      where: {
-        id: patientId,
-      },
-      data: updates,
-    });
+    try {
+      await prisma.patient.update({
+        where: {
+          id: patientId,
+          updatedAt: expectedDate,
+        },
+        data: updates,
+      });
+    } catch (error) {
+      if (error?.code === "P2025") {
+        return Response.json(
+          {
+            success: false,
+            message:
+              "This patient was changed by another user. Refresh before saving your changes.",
+          },
+          { status: 409 },
+        );
+      }
+
+      throw error;
+    }
 
     if (categoryChanged && selectedCategory) {
       const dueDate = new Date();

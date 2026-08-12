@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
+import { logActivity } from "../../../src/lib/activityLog";
 import { readJsonBody } from "../../../src/lib/requestBody";
 import { validObjectId } from "../../../src/lib/inputValidation";
 import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
@@ -368,7 +369,7 @@ export async function POST(request) {
       return Response.json(
         {
           success: false,
-          message: "Clinic location not available",
+          message: "Location not available",
         },
         { status: 404 },
       );
@@ -448,6 +449,19 @@ export async function POST(request) {
             location: true,
           },
         });
+
+      await logActivity({
+        actor: user,
+        module: "appointment",
+        action: "created",
+        title: "Appointment created",
+        description:
+          `${appointment.patient?.fullName || "Patient"} · ${appointment.dateKey} · ${appointment.startTime}`,
+        patientId: appointment.patientId,
+        recordId: appointment.id,
+        relatedPath:
+          `/patients/${appointment.patientId}`,
+      });
 
       return Response.json(
         {

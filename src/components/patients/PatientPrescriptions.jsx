@@ -304,12 +304,15 @@ export default function PatientPrescriptions({
             onSaved={async (prescription) => {
               setShowBuilder(false);
 
-              if (onRefresh) {
-                await onRefresh();
+              if (onPrescriptionSaved) {
+                await onPrescriptionSaved(
+                  prescription,
+                );
+                return;
               }
 
-              if (onPrescriptionSaved) {
-                onPrescriptionSaved(prescription);
+              if (onRefresh) {
+                await onRefresh();
               }
             }}
           />
