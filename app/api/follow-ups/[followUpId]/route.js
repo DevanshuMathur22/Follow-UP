@@ -13,6 +13,43 @@ const priorities = ["low", "medium", "high"];
 const types = ["call", "visit", "message", "email"];
 const sources = ["manual", "category"];
 
+const retryOutcomes = new Set([
+  "no answer",
+  "not reachable",
+  "busy",
+  "call back later",
+]);
+
+const noteRequiredOutcomes = new Set([
+  "wrong number",
+  "other",
+]);
+
+function parseOutcome(value) {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return {
+      type: "",
+      details: "",
+    };
+  }
+
+  const parts = text.split(
+    /\s+[—-]\s+/,
+  );
+
+  return {
+    type: String(parts[0] || "")
+      .trim()
+      .toLowerCase(),
+    details: parts
+      .slice(1)
+      .join(" — ")
+      .trim(),
+  };
+}
+
 function parseDate(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -292,6 +329,63 @@ export async function PATCH(request, { params }) {
     const effectiveStatus = updates.status || existing.status;
     const effectiveOutcome =
       body.outcome !== undefined ? updates.outcome : existing.outcome;
+
+    const outcomeInfo =
+      parseOutcome(effectiveOutcome);
+
+    const requiresRetry =
+      retryOutcomes.has(
+        outcomeInfo.type,
+      );
+
+    const requiresOutcomeNote =
+      noteRequiredOutcomes.has(
+        outcomeInfo.type,
+      );
+
+    if (
+      body.status === "Completed" &&
+      requiresRetry
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "This outcome must stay pending and be rescheduled",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.outcome !== undefined &&
+      requiresRetry &&
+      body.dueDate === undefined
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "Next follow-up date is required for this outcome",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      body.outcome !== undefined &&
+      requiresOutcomeNote &&
+      !outcomeInfo.details
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "A note is required for this outcome",
+        },
+        { status: 400 },
+      );
+    }
 
     if (effectiveStatus === "Completed" && !effectiveOutcome) {
       return Response.json(

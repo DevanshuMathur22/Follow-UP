@@ -32,12 +32,23 @@ const tabs = [
 
 const completionOutcomes = [
   "Contacted",
-  "No answer",
+  "No Answer",
+  "Not Reachable",
   "Busy",
-  "Call back later",
-  "Visit planned",
+  "Call Back Later",
+  "Visit Planned",
+  "Appointment Booked",
+  "Wrong Number",
+  "Refused",
   "Other",
 ];
+
+const retryOutcomes = new Set([
+  "No Answer",
+  "Not Reachable",
+  "Busy",
+  "Call Back Later",
+]);
 
 const emptyForm = {
   patientId: "",
@@ -134,6 +145,18 @@ export default function FollowUps() {
   const [nextFollowUpForm, setNextFollowUpForm] =
     useState(emptyNextFollowUp);
   const [clock, setClock] = useState(() => new Date());
+
+  const completionRequiresRetry =
+    retryOutcomes.has(completionOutcome);
+
+  useEffect(() => {
+    if (!completionRequiresRetry) return;
+
+    setNextFollowUpForm((current) => ({
+      ...current,
+      enabled: true,
+    }));
+  }, [completionRequiresRetry]);
 
   async function loadFollowUps({
     silent = false,
@@ -443,7 +466,37 @@ export default function FollowUps() {
       return;
     }
 
+    const requiresRetry =
+      retryOutcomes.has(completionOutcome);
+
+    const requiresNotes =
+      completionOutcome === "Other" ||
+      completionOutcome === "Wrong Number";
+
     if (
+      requiresNotes &&
+      !completionNotes.trim()
+    ) {
+      toast.error(
+        completionOutcome === "Wrong Number"
+          ? "Add a note about the wrong number"
+          : "Add details for the outcome",
+      );
+      return;
+    }
+
+    if (
+      requiresRetry &&
+      !nextFollowUpForm.dueDate
+    ) {
+      toast.error(
+        "Select the next follow-up date and time",
+      );
+      return;
+    }
+
+    if (
+      !requiresRetry &&
       nextFollowUpForm.enabled &&
       !nextFollowUpForm.dueDate
     ) {
@@ -454,56 +507,93 @@ export default function FollowUps() {
     }
 
     try {
-      setActionLoadingId(completionTarget.id);
-
-      const payload = {
-        status: "Completed",
-        outcome: [
-          completionOutcome,
-          completionNotes.trim(),
-        ]
-          .filter(Boolean)
-          .join(" — "),
-        completedAt: new Date().toISOString(),
-      };
-
-      if (nextFollowUpForm.enabled) {
-        payload.nextDueDate = new Date(
-          nextFollowUpForm.dueDate,
-        ).toISOString();
-        payload.nextType =
-          nextFollowUpForm.type;
-        payload.nextPriority =
-          nextFollowUpForm.priority;
-        payload.nextNotes =
-          nextFollowUpForm.notes.trim();
-      }
-
-      await updateFollowUp(
+      setActionLoadingId(
         completionTarget.id,
-        {
-          ...payload,
-          expectedUpdatedAt:
-            completionTarget.updatedAt,
-        },
       );
 
-      await loadFollowUps();
+      const outcome = [
+        completionOutcome,
+        completionNotes.trim(),
+      ]
+        .filter(Boolean)
+        .join(" — ");
 
-      toast.success(
-        nextFollowUpForm.enabled
-          ? "Follow-up completed and next follow-up scheduled"
-          : "Follow-up completed",
-      );
+      if (requiresRetry) {
+        await updateFollowUp(
+          completionTarget.id,
+          {
+            status: "Scheduled",
+            outcome,
+            dueDate: new Date(
+              nextFollowUpForm.dueDate,
+            ).toISOString(),
+            type:
+              nextFollowUpForm.type ||
+              completionTarget.type ||
+              "call",
+            priority:
+              nextFollowUpForm.priority ||
+              completionTarget.priority ||
+              "medium",
+            completedAt: null,
+            expectedUpdatedAt:
+              completionTarget.updatedAt,
+          },
+        );
+
+        await loadFollowUps();
+
+        toast.success(
+          "Follow-up kept pending and rescheduled",
+        );
+      } else {
+        const payload = {
+          status: "Completed",
+          outcome,
+          completedAt:
+            new Date().toISOString(),
+        };
+
+        if (nextFollowUpForm.enabled) {
+          payload.nextDueDate = new Date(
+            nextFollowUpForm.dueDate,
+          ).toISOString();
+          payload.nextType =
+            nextFollowUpForm.type;
+          payload.nextPriority =
+            nextFollowUpForm.priority;
+          payload.nextNotes =
+            nextFollowUpForm.notes.trim();
+        }
+
+        await updateFollowUp(
+          completionTarget.id,
+          {
+            ...payload,
+            expectedUpdatedAt:
+              completionTarget.updatedAt,
+          },
+        );
+
+        await loadFollowUps();
+
+        toast.success(
+          nextFollowUpForm.enabled
+            ? "Follow-up completed and next follow-up scheduled"
+            : "Follow-up completed",
+        );
+      }
 
       setCompletionTarget(null);
       setCompletionOutcome("");
       setCompletionNotes("");
-      setNextFollowUpForm(emptyNextFollowUp);
+      setNextFollowUpForm(
+        emptyNextFollowUp,
+      );
     } catch (updateError) {
       toast.error(
         updateError.response?.data?.message ||
-          "Unable to complete follow-up",
+          "Unable to update follow-up",
       );
     } finally {
       setActionLoadingId("");
