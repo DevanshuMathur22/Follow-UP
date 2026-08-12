@@ -135,9 +135,14 @@ export default function FollowUps() {
     useState(emptyNextFollowUp);
   const [clock, setClock] = useState(() => new Date());
 
-  async function loadFollowUps() {
+  async function loadFollowUps({
+    silent = false,
+  } = {}) {
     try {
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
+
       setError("");
 
       const [followUpData, patientData] =
@@ -149,17 +154,52 @@ export default function FollowUps() {
       setFollowUps(followUpData);
       setPatients(patientData);
     } catch (loadError) {
-      setError(
-        loadError.response?.data?.message ||
-          "Follow-ups could not be loaded.",
-      );
+      if (!silent) {
+        setError(
+          loadError.response?.data?.message ||
+            "Follow-ups could not be loaded.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    loadFollowUps();
+    void loadFollowUps();
+
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void loadFollowUps({
+          silent: true,
+        });
+      }
+    };
+
+    const interval = window.setInterval(
+      refresh,
+      20_000,
+    );
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener(
+      "visibilitychange",
+      refresh,
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(
+        "focus",
+        refresh,
+      );
+      document.removeEventListener(
+        "visibilitychange",
+        refresh,
+      );
+    };
   }, []);
 
   useEffect(() => {
@@ -312,6 +352,8 @@ export default function FollowUps() {
           {
             ...payload,
             status: "Scheduled",
+            expectedUpdatedAt:
+              editingFollowUp.updatedAt,
           },
         );
 
@@ -439,7 +481,11 @@ export default function FollowUps() {
 
       await updateFollowUp(
         completionTarget.id,
-        payload,
+        {
+          ...payload,
+          expectedUpdatedAt:
+            completionTarget.updatedAt,
+        },
       );
 
       await loadFollowUps();
@@ -478,7 +524,11 @@ export default function FollowUps() {
 
       const updated = await updateFollowUp(
         followUp.id,
-        { status: "Cancelled" },
+        {
+          status: "Cancelled",
+          expectedUpdatedAt:
+            followUp.updatedAt,
+        },
       );
 
       applyUpdatedFollowUp(followUp, updated);

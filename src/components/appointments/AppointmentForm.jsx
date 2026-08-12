@@ -781,7 +781,7 @@ export default function Appointments() {
     try {
       setSaving(true);
 
-      await createAppointment({
+      const appointmentPayload = {
         patientId: form.patientId,
         locationId: form.locationId,
         dateKey: form.dateKey,
@@ -791,7 +791,50 @@ export default function Appointments() {
         priority: form.priority,
         reason: form.reason,
         notes: form.notes,
-      });
+      };
+
+      try {
+        await createAppointment(
+          appointmentPayload,
+        );
+      } catch (bookingError) {
+        const response =
+          bookingError.response?.data;
+
+        if (
+          bookingError.response?.status === 409 &&
+          response?.code ===
+            "ACTIVE_APPOINTMENT_EXISTS"
+        ) {
+          const existing =
+            response.existingAppointment;
+
+          const details = [
+            existing?.dateKey,
+            existing?.startTime,
+            existing?.location?.name,
+            existing?.status,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+
+          const confirmed =
+            window.confirm(
+              `This patient already has an active appointment${details ? `:\n\n${details}` : "."}\n\nDo you still want to book another appointment?`,
+            );
+
+          if (!confirmed) {
+            return;
+          }
+
+          await createAppointment({
+            ...appointmentPayload,
+            allowExistingAppointment: true,
+          });
+        } else {
+          throw bookingError;
+        }
+      }
 
       toast.success("Appointment booked");
 

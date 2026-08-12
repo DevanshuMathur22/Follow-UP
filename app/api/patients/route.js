@@ -10,6 +10,10 @@ import { logActivity } from "../../../src/lib/activityLog";
 
 const genders = ["Female", "Male", "Other", "Prefer_not_to_say"];
 
+function patientMobileDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function cleanPatient(data) {
   return {
     fullName: String(data.fullName || "").trim(),
@@ -202,6 +206,50 @@ export async function POST(request) {
           message: validationError,
         },
         { status: 400 }
+      );
+    }
+
+    const sameNamePatients =
+      await prisma.patient.findMany({
+        where: {
+          fullName: {
+            equals: data.fullName,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          id: true,
+          patientCode: true,
+          fullName: true,
+          mobile: true,
+          dob: true,
+          city: true,
+          isDeleted: true,
+        },
+      });
+
+    const incomingMobile =
+      patientMobileDigits(data.mobile);
+
+    const duplicatePatient =
+      sameNamePatients.find(
+        (item) =>
+          patientMobileDigits(
+            item.mobile,
+          ) === incomingMobile,
+      );
+
+    if (duplicatePatient) {
+      return Response.json(
+        {
+          success: false,
+          code: "DUPLICATE_PATIENT",
+          message: duplicatePatient.isDeleted
+            ? `This patient already exists in Archived Patients (${duplicatePatient.patientCode}). Restore the existing record instead of creating a duplicate.`
+            : `Patient already exists (${duplicatePatient.patientCode}). Open the existing patient record instead.`,
+          patient: duplicatePatient,
+        },
+        { status: 409 },
       );
     }
 

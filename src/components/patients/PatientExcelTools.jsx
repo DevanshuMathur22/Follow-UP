@@ -15,6 +15,7 @@ const HEADERS = [
   "Full Name",
   "Mobile",
   "WhatsApp",
+  "DOB",
   "Age",
   "Gender",
   "City",
@@ -49,6 +50,151 @@ function normalizeGender(value) {
   return "";
 }
 
+function normalizedCity(value) {
+  return text(value)
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function datePartsKey(year, month, day) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+
+  if (
+    !Number.isInteger(y) ||
+    !Number.isInteger(m) ||
+    !Number.isInteger(d) ||
+    y < 1900 ||
+    m < 1 ||
+    m > 12 ||
+    d < 1 ||
+    d > 31
+  ) {
+    return "";
+  }
+
+  const check = new Date(
+    Date.UTC(y, m - 1, d),
+  );
+
+  if (
+    check.getUTCFullYear() !== y ||
+    check.getUTCMonth() + 1 !== m ||
+    check.getUTCDate() !== d
+  ) {
+    return "";
+  }
+
+  return `${String(y).padStart(
+    4,
+    "0",
+  )}-${String(m).padStart(
+    2,
+    "0",
+  )}-${String(d).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+function normalizeDob(value) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return "";
+  }
+
+  if (value instanceof Date) {
+    return datePartsKey(
+      value.getFullYear(),
+      value.getMonth() + 1,
+      value.getDate(),
+    );
+  }
+
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
+    const date = new Date(
+      Date.UTC(1899, 11, 30) +
+        Math.floor(value) * 86400000,
+    );
+
+    return datePartsKey(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + 1,
+      date.getUTCDate(),
+    );
+  }
+
+  const raw = text(value);
+
+  let match = raw.match(
+    /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/,
+  );
+
+  if (match) {
+    return datePartsKey(
+      match[1],
+      match[2],
+      match[3],
+    );
+  }
+
+  match = raw.match(
+    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/,
+  );
+
+  if (match) {
+    return datePartsKey(
+      match[3],
+      match[2],
+      match[1],
+    );
+  }
+
+  const parsed = new Date(raw);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return datePartsKey(
+    parsed.getFullYear(),
+    parsed.getMonth() + 1,
+    parsed.getDate(),
+  );
+}
+
+function nameMobileKey(patient) {
+  const name = normalizedName(
+    patient?.fullName,
+  );
+  const mobile = digits(patient?.mobile);
+
+  return name && mobile
+    ? `${name}|${mobile}`
+    : "";
+}
+
+function nameDobCityKey(patient) {
+  const name = normalizedName(
+    patient?.fullName,
+  );
+  const dob = normalizeDob(patient?.dob);
+  const city = normalizedCity(
+    patient?.city,
+  );
+
+  return name && dob && city
+    ? `${name}|${dob}|${city}`
+    : "";
+}
+
 function cellValue(cell) {
   const value = cell?.value;
 
@@ -72,14 +218,18 @@ function cellValue(cell) {
 }
 
 function buildPatient(row, headerMap) {
-  function get(name) {
+  function getRaw(name) {
     const column = headerMap.get(
       name.toLowerCase(),
     );
 
     return column
-      ? text(cellValue(row.getCell(column)))
+      ? cellValue(row.getCell(column))
       : "";
+  }
+
+  function get(name) {
+    return text(getRaw(name));
   }
 
   const ageRaw = get("age");
@@ -87,17 +237,25 @@ function buildPatient(row, headerMap) {
     ? Number.parseInt(ageRaw, 10)
     : null;
 
+  const dobRaw = getRaw("dob");
+  const dob = normalizeDob(dobRaw);
+  const dobProvided =
+    text(dobRaw) !== "";
+
   return {
     fullName: get("full name"),
     mobile: get("mobile"),
     whatsapp: get("whatsapp"),
+    dob,
     age:
       Number.isInteger(parsedAge) &&
       parsedAge >= 0 &&
-      parsedAge <= 130
+      parsedAge <= 150
         ? parsedAge
         : "",
-    gender: normalizeGender(get("gender")),
+    gender: normalizeGender(
+      get("gender"),
+    ),
     city: get("city"),
     state: get("state"),
     category: get("category"),
@@ -106,6 +264,8 @@ function buildPatient(row, headerMap) {
     history: get("medical history"),
     allergies: get("allergies"),
     remarks: get("remarks"),
+    _dobInvalid:
+      dobProvided && !dob,
   };
 }
 
@@ -156,6 +316,7 @@ export default function PatientExcelTools({
         { width: 28 },
         { width: 17 },
         { width: 17 },
+        { width: 14 },
         { width: 9 },
         { width: 12 },
         { width: 18 },
@@ -215,6 +376,9 @@ export default function PatientExcelTools({
           patient.fullName || "",
           patient.mobile || "",
           patient.whatsapp || "",
+          patient.dob
+            ? normalizeDob(patient.dob)
+            : "",
           patient.age ?? "",
           patient.gender || "",
           patient.city || "",
@@ -244,6 +408,7 @@ export default function PatientExcelTools({
         { width: 28 },
         { width: 17 },
         { width: 17 },
+        { width: 14 },
         { width: 9 },
         { width: 12 },
         { width: 18 },
@@ -265,7 +430,7 @@ export default function PatientExcelTools({
 
       sheet.autoFilter = {
         from: "A1",
-        to: "Q1",
+        to: "R1",
       };
 
       sheet.views = [
@@ -316,8 +481,11 @@ export default function PatientExcelTools({
     try {
       setReading(true);
 
-      const ExcelJS = await excelLibrary();
-      const workbook = new ExcelJS.Workbook();
+      const ExcelJS =
+        await excelLibrary();
+
+      const workbook =
+        new ExcelJS.Workbook();
 
       await workbook.xlsx.load(
         await file.arrayBuffer(),
@@ -335,7 +503,9 @@ export default function PatientExcelTools({
       sheet.getRow(1).eachCell(
         (cell, column) => {
           headerMap.set(
-            text(cellValue(cell)).toLowerCase(),
+            text(
+              cellValue(cell),
+            ).toLowerCase(),
             column,
           );
         },
@@ -351,27 +521,26 @@ export default function PatientExcelTools({
         return;
       }
 
-      const currentMobiles = new Set(
-        patients
-          .map((patient) =>
-            digits(patient.mobile),
-          )
-          .filter(Boolean),
-      );
+      const currentStrongKeys =
+        new Set(
+          patients
+            .map(nameMobileKey)
+            .filter(Boolean),
+        );
 
-      const currentNames = new Set(
-        patients.map(
-          (patient) =>
-            `${normalizedName(
-              patient.fullName,
-            )}|${text(
-              patient.city,
-            ).toLowerCase()}`,
-        ),
-      );
+      const currentPossibleKeys =
+        new Set(
+          patients
+            .map(nameDobCityKey)
+            .filter(Boolean),
+        );
 
-      const uploadedMobiles = new Set();
-      const uploadedNames = new Set();
+      const uploadedStrongKeys =
+        new Set();
+
+      const uploadedPossibleKeys =
+        new Set();
+
       const rows = [];
 
       sheet.eachRow(
@@ -381,24 +550,21 @@ export default function PatientExcelTools({
         (row, rowNumber) => {
           if (rowNumber === 1) return;
 
-          const patient = buildPatient(
-            row,
-            headerMap,
-          );
+          const patient =
+            buildPatient(
+              row,
+              headerMap,
+            );
 
-          const mobile = digits(
-            patient.mobile,
-          );
+          const strongKey =
+            nameMobileKey(patient);
 
-          const nameKey =
-            `${normalizedName(
-              patient.fullName,
-            )}|${text(
-              patient.city,
-            ).toLowerCase()}`;
+          const possibleKey =
+            nameDobCityKey(patient);
 
           let status = "new";
-          let message = "Ready to import";
+          let message =
+            "Ready to import";
 
           if (
             !patient.fullName ||
@@ -408,30 +574,51 @@ export default function PatientExcelTools({
             message =
               "Full Name and Mobile are required";
           } else if (
-            currentMobiles.has(mobile) ||
-            currentNames.has(nameKey)
+            patient._dobInvalid
           ) {
-            status = "duplicate";
+            status = "invalid";
             message =
-              "Possible existing patient";
+              "Invalid DOB";
           } else if (
-            uploadedMobiles.has(mobile) ||
-            uploadedNames.has(nameKey)
+            strongKey &&
+            (
+              currentStrongKeys.has(
+                strongKey,
+              ) ||
+              uploadedStrongKeys.has(
+                strongKey,
+              )
+            )
           ) {
             status = "duplicate";
             message =
-              "Duplicate inside Excel file";
-          }
-
-          if (mobile) {
-            uploadedMobiles.add(mobile);
-          }
-
-          if (
-            patient.fullName ||
-            patient.city
+              "Exact patient duplicate";
+          } else if (
+            possibleKey &&
+            (
+              currentPossibleKeys.has(
+                possibleKey,
+              ) ||
+              uploadedPossibleKeys.has(
+                possibleKey,
+              )
+            )
           ) {
-            uploadedNames.add(nameKey);
+            status = "possible";
+            message =
+              "Same name, DOB and city";
+          }
+
+          if (strongKey) {
+            uploadedStrongKeys.add(
+              strongKey,
+            );
+          }
+
+          if (possibleKey) {
+            uploadedPossibleKeys.add(
+              possibleKey,
+            );
           }
 
           rows.push({
@@ -473,13 +660,15 @@ export default function PatientExcelTools({
   }
 
   async function importRows(
-    includeDuplicates = false,
+    includePossible = false,
   ) {
     const rows = preview.filter(
       (item) =>
         item.status === "new" ||
-        (includeDuplicates &&
-          item.status === "duplicate"),
+        (
+          includePossible &&
+          item.status === "possible"
+        ),
     );
 
     if (!rows.length) {
@@ -497,9 +686,12 @@ export default function PatientExcelTools({
 
       for (const item of rows) {
         try {
-          await createPatient(
-            item.patient,
-          );
+          const {
+            _dobInvalid,
+            ...patient
+          } = item.patient;
+
+          await createPatient(patient);
 
           success += 1;
         } catch {
@@ -541,6 +733,11 @@ export default function PatientExcelTools({
   const duplicateCount = preview.filter(
     (item) =>
       item.status === "duplicate",
+  ).length;
+
+  const possibleCount = preview.filter(
+    (item) =>
+      item.status === "possible",
   ).length;
 
   const invalidCount = preview.filter(
@@ -611,8 +808,9 @@ export default function PatientExcelTools({
 
                 <p className="mt-1 text-sm text-slate-500">
                   {newCount} new ·{" "}
-                  {duplicateCount} possible
-                  duplicate · {invalidCount} invalid
+                  {possibleCount} possible duplicate ·{" "}
+                  {duplicateCount} exact duplicate ·{" "}
+                  {invalidCount} invalid
                 </p>
               </div>
 
@@ -673,6 +871,9 @@ export default function PatientExcelTools({
                           {item.patient.age
                             ? ` · ${item.patient.age} yrs`
                             : ""}
+                          {item.patient.dob
+                            ? ` · DOB ${item.patient.dob}`
+                            : ""}
                         </p>
                       </td>
 
@@ -697,7 +898,7 @@ export default function PatientExcelTools({
                             item.status === "new"
                               ? "bg-emerald-50 text-emerald-700"
                               : item.status ===
-                                  "duplicate"
+                                  "possible"
                                 ? "bg-amber-50 text-amber-700"
                                 : "bg-rose-50 text-rose-700"
                           }`}
@@ -713,12 +914,12 @@ export default function PatientExcelTools({
 
             <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <p className="text-xs text-slate-500">
-                Possible duplicates are skipped by
-                default.
+                Exact duplicates are always skipped.
+                Possible duplicates are skipped by default.
               </p>
 
               <div className="flex flex-wrap justify-end gap-2">
-                {duplicateCount > 0 && (
+                {possibleCount > 0 && (
                   <button
                     type="button"
                     disabled={importing}
@@ -727,7 +928,7 @@ export default function PatientExcelTools({
                     }
                     className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 disabled:opacity-50"
                   >
-                    Import All Valid
+                    Import New + Possible
                   </button>
                 )}
 

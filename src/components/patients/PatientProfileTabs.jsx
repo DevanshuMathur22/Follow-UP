@@ -278,6 +278,8 @@ export default function PatientProfileTabs({
             notes: followUpForm.notes.trim(),
             status: "Scheduled",
             source: "manual",
+            expectedUpdatedAt:
+              nextScheduledFollowUp.updatedAt,
           },
         );
 

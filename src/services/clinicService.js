@@ -583,60 +583,130 @@ export async function updateAppointment(appointmentId, updates) {
 
 export async function createPrescription(input) {
   const formData = new FormData();
-  const { file, patientId, medicines, ...fields } = input;
+  const {
+    file,
+    patientId,
+    medicines,
+    ...fields
+  } = input;
+
   delete fields.report;
-  formData.append("patient", patientId);
-  Object.entries(fields).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") formData.append(key, value);
-  });
-  formData.append("medications", JSON.stringify(medicines || []));
-  if (file) formData.append("file", file);
-  const result = await requestOrDemo(
-    async () => unwrap(await api.post("/prescriptions", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })),
-    () => {
-      const store = getStore();
-      const record = {
-        ...input,
-        id: makeId("RX", store.prescriptions),
-        createdAt: new Date().toISOString(),
-        attachment: file ? { originalName: file.name } : undefined,
-      };
-      delete record.file;
-      delete record.report;
-      store.prescriptions.unshift(record);
-      saveStore(store);
-      return record;
+
+  formData.append(
+    "patient",
+    patientId,
+  );
+
+  Object.entries(fields).forEach(
+    ([key, value]) => {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== ""
+      ) {
+        formData.append(key, value);
+      }
     },
   );
-  const prescription = result.prescription || result;
+
+  formData.append(
+    "medications",
+    JSON.stringify(medicines || []),
+  );
+
+  if (file) {
+    formData.append("file", file);
+  }
+
+  const result = unwrap(
+    await api.post(
+      "/prescriptions",
+      formData,
+      {
+        headers: {
+          "Content-Type":
+            "multipart/form-data",
+        },
+      },
+    ),
+  );
+
+  const prescription =
+    result.prescription || result;
+
   return {
     ...prescription,
     id: getId(prescription),
-    patientId: prescription.patientId || prescription.patient?._id || prescription.patient || input.patientId,
-    medicines: prescription.medicines || prescription.medications || input.medicines || [],
-    visitDate: prescription.visitDate || prescription.issuedAt || input.visitDate,
-    attachmentName: prescription.attachment?.originalName || prescription.attachment?.filename,
-    attachmentUrl: prescription.attachment?.url || prescription.attachment?.externalUrl,
+    patientId:
+      prescription.patientId ||
+      prescription.patient?._id ||
+      prescription.patient ||
+      input.patientId,
+    medicines:
+      prescription.medicines ||
+      prescription.medications ||
+      input.medicines ||
+      [],
+    visitDate:
+      prescription.visitDate ||
+      prescription.issuedAt ||
+      input.visitDate,
+    attachmentName:
+      prescription.attachmentName ||
+      prescription.attachment?.originalName ||
+      prescription.attachment?.filename,
+    attachmentUrl:
+      prescription.attachmentUrl ||
+      prescription.attachment?.url ||
+      prescription.attachment?.externalUrl,
   };
 }
 
-export async function getPrescriptions(patientId) {
-  const result = await requestOrDemo(
-    async () => unwrap(await api.get("/prescriptions", { params: patientId ? { patient: patientId } : {} })),
-    () => getStore().prescriptions.filter((item) => !patientId || item.patientId === patientId),
+export async function getPrescriptions(
+  patientId,
+) {
+  const result = unwrap(
+    await api.get(
+      "/prescriptions",
+      {
+        params: patientId
+          ? {
+              patient: patientId,
+            }
+          : {},
+      },
+    ),
   );
-  const items = Array.isArray(result) ? result : result?.prescriptions || [];
+
+  const items = Array.isArray(result)
+    ? result
+    : result?.prescriptions || [];
+
   return items.map((item) => ({
     ...item,
     id: getId(item),
-    patientId: item.patientId || item.patient?._id || item.patient,
-    visitDate: item.visitDate || item.issuedAt,
-    nextFollowUp: item.nextFollowUp || item.followUpDate,
-    medicines: item.medicines || item.medications || [],
-    attachmentName: item.attachment?.originalName || item.attachment?.filename,
-    attachmentUrl: item.attachment?.url || item.attachment?.externalUrl,
+    patientId:
+      item.patientId ||
+      item.patient?._id ||
+      item.patient,
+    visitDate:
+      item.visitDate ||
+      item.issuedAt,
+    nextFollowUp:
+      item.nextFollowUp ||
+      item.followUpDate,
+    medicines:
+      item.medicines ||
+      item.medications ||
+      [],
+    attachmentName:
+      item.attachmentName ||
+      item.attachment?.originalName ||
+      item.attachment?.filename,
+    attachmentUrl:
+      item.attachmentUrl ||
+      item.attachment?.url ||
+      item.attachment?.externalUrl,
   }));
 }
 

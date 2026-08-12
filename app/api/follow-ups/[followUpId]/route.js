@@ -97,6 +97,50 @@ export async function PATCH(request, { params }) {
       return bodyError;
     }
 
+    const expectedUpdatedAt =
+      String(body.expectedUpdatedAt || "").trim();
+
+    if (!expectedUpdatedAt) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "Follow-up is not fully loaded. Refresh and try again.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const expectedDate =
+      new Date(expectedUpdatedAt);
+
+    if (
+      Number.isNaN(expectedDate.getTime())
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid follow-up version",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      expectedDate.getTime() !==
+      new Date(existing.updatedAt).getTime()
+    ) {
+      return Response.json(
+        {
+          success: false,
+          message:
+            "This follow-up was changed by another user. Refresh before continuing.",
+          followUp: existing,
+        },
+        { status: 409 },
+      );
+    }
+
     const updates = {};
 
     if (body.status !== undefined) {
@@ -349,28 +393,86 @@ export async function PATCH(request, { params }) {
       };
     }
 
-    const followUp = await prisma.followUp.update({
-      where: {
-        id: followUpId,
-      },
-      data: updates,
-      include: {
-        patient: true,
-      },
-    });
-
+    let followUp;
     let nextFollowUp = null;
 
-    if (nextFollowUpData) {
-      nextFollowUp = await prisma.followUp.create({
-        data: nextFollowUpData,
-        include: {
-          patient: true,
-        },
-      });
-    }
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          const updatedFollowUp =
+            await tx.followUp.update({
+              where: {
+                id: followUpId,
+                updatedAt: expectedDate,
+              },
+              data: updates,
+              include: {
+                patient: true,
+              },
+            });
 
-    await syncPatientNextFollowUp(existing.patientId);
+          let createdNextFollowUp = null;
+
+          if (nextFollowUpData) {
+            createdNextFollowUp =
+              await tx.followUp.create({
+                data: nextFollowUpData,
+                include: {
+                  patient: true,
+                },
+              });
+          }
+
+          const next =
+            await tx.followUp.findFirst({
+              where: {
+                patientId:
+                  existing.patientId,
+                status: "Scheduled",
+              },
+              orderBy: {
+                dueDate: "asc",
+              },
+              select: {
+                dueDate: true,
+              },
+            });
+
+          await tx.patient.update({
+            where: {
+              id: existing.patientId,
+            },
+            data: {
+              nextFollowUp:
+                next?.dueDate || null,
+            },
+          });
+
+          return {
+            followUp: updatedFollowUp,
+            nextFollowUp:
+              createdNextFollowUp,
+          };
+        },
+      );
+
+      followUp = result.followUp;
+      nextFollowUp =
+        result.nextFollowUp;
+    } catch (error) {
+      if (error?.code === "P2025") {
+        return Response.json(
+          {
+            success: false,
+            message:
+              "This follow-up was changed by another user. Refresh before continuing.",
+          },
+          { status: 409 },
+        );
+      }
+
+      throw error;
+    }
 
     let activityAction = "updated";
     let activityTitle = "Follow-up updated";

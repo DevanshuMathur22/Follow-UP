@@ -230,66 +230,103 @@ export default function Settings() {
   }
 
   async function handleExport({ backup = false } = {}) {
-    if (!backup && !settings.allowDataExport) {
-      toast.error("Data export is disabled in Security settings");
+    if (
+      !backup &&
+      !settings.allowDataExport
+    ) {
+      toast.error(
+        "Data export is disabled in Security settings",
+      );
       return;
     }
 
-    const collections = [
-      ["patients", getPatients()],
-      ["categories", getCategories()],
-      ["followUps", getFollowUps()],
-      ["appointments", getAppointments()],
-      ["prescriptions", getPrescriptions()],
-      ["reports", getReports()],
-      ["invoices", getInvoices()],
-      ["payments", getPayments()],
-      ["tasks", getTasks({ includeDeleted: settings.includeArchivedInExports ? "true" : undefined })],
-      ["notifications", getNotifications()],
-      ["activities", getActivityLogs()],
-    ];
-
     try {
       setExporting(true);
-      const results = await Promise.allSettled(collections.map(([, request]) => request));
-      const failedCollections = [];
-      const data = results.reduce((result, item, index) => {
-        const [key] = collections[index];
-        if (item.status === "fulfilled") result[key] = item.value;
-        else {
-          result[key] = [];
-          failedCollections.push(key);
-        }
-        return result;
-      }, {});
-      const exportedAt = new Date();
-      const exportSettings = backup
-        ? { ...settings, lastBackupAt: exportedAt.toISOString() }
-        : settings;
-      const content = JSON.stringify({
-        exportedAt: exportedAt.toISOString(),
-        exportType: backup ? "manual-browser-backup" : "clinic-data-export",
-        settings: exportSettings,
-        data,
-        unavailableCollections: failedCollections,
-      }, null, 2);
-      const fileUrl = URL.createObjectURL(new Blob([content], { type: "application/json" }));
-      const link = document.createElement("a");
+
+      const response = await fetch(
+        "/api/backups/export",
+        {
+          method: "GET",
+          credentials: "same-origin",
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        let message =
+          "Unable to create database backup";
+
+        try {
+          const payload =
+            await response.json();
+
+          message =
+            payload?.message || message;
+        } catch {}
+
+        throw new Error(message);
+      }
+
+      const blob =
+        await response.blob();
+
+      const disposition =
+        response.headers.get(
+          "content-disposition",
+        ) || "";
+
+      const match =
+        disposition.match(
+          /filename="([^"]+)"/,
+        );
+
+      const filename =
+        match?.[1] ||
+        `caretrack-backup-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
+
+      const fileUrl =
+        URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
       link.href = fileUrl;
-      link.download = `caretrack-${backup ? "backup" : "export"}-${exportedAt.toISOString().slice(0, 10)}.json`;
+      link.download = filename;
+
+      document.body.appendChild(link);
       link.click();
+      link.remove();
+
       URL.revokeObjectURL(fileUrl);
 
+      const exportedAt =
+        new Date();
+
       if (backup) {
-        setSettings(exportSettings);
-        persistSettings(exportSettings, "Manual backup downloaded and timestamp saved");
-      } else if (failedCollections.length) {
-        toast("Data export downloaded with some unavailable collections", { icon: "⚠️" });
+        const nextSettings = {
+          ...settings,
+          lastBackupAt:
+            exportedAt.toISOString(),
+        };
+
+        setSettings(nextSettings);
+
+        persistSettings(
+          nextSettings,
+          "Database backup downloaded",
+        );
       } else {
-        toast.success("Data export downloaded");
+        toast.success(
+          "Database export downloaded",
+        );
       }
-    } catch {
-      toast.error("Unable to create data export");
+    } catch (error) {
+      toast.error(
+        error?.message ||
+          "Unable to create database backup",
+      );
     } finally {
       setExporting(false);
     }
@@ -430,19 +467,19 @@ export default function Settings() {
   function renderDataSettings() {
     return (
       <div className="space-y-5">
-        <SectionCard icon={DatabaseBackup} tone="bg-violet-50 text-violet-600" title="Backup settings" description="Prepare local backups while server-side scheduled backup infrastructure is configured.">
+        <SectionCard icon={DatabaseBackup} tone="bg-violet-50 text-violet-600" title="Database backup" description="Download a protected copy of the important database records in this workspace.">
           <div className="grid gap-5 md:grid-cols-2">
             <Field label="Backup frequency"><select name="backupFrequency" value={settings.backupFrequency} onChange={updateSetting} disabled={!settings.autoBackup} className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-50`}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></Field>
             <Field label="Keep backups for (days)"><input min="1" type="number" name="backupRetentionDays" value={settings.backupRetentionDays} onChange={updateSetting} disabled={!settings.autoBackup} className={`${inputClass} disabled:cursor-not-allowed disabled:opacity-50`} /></Field>
           </div>
-          <div className="mt-5"><ToggleRow title="Prepare scheduled backup preference" description="Saves the schedule preference locally; a server backup worker must be configured before automatic backups run." checked={settings.autoBackup} onChange={() => toggleSetting("autoBackup")} /></div>
-          <div className="mt-5 flex flex-col gap-4 rounded-xl border border-violet-100 bg-violet-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-violet-900">Last manual backup</p><p className="mt-1 text-xs text-violet-700">{settings.lastBackupAt ? formatDate(settings.lastBackupAt, { hour: "numeric", minute: "2-digit" }) : "No browser backup has been created yet."}</p></div><button type="button" disabled={exporting} onClick={() => void handleExport({ backup: true })} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"><HardDriveUpload size={17} />{exporting ? "Preparing…" : "Create backup copy"}</button></div>
+          <div className="mt-5"><ToggleRow title="Automatic backup preference" description="Stores the preferred schedule. Automatic off-device backups will be configured separately before production." checked={settings.autoBackup} onChange={() => toggleSetting("autoBackup")} /></div>
+          <div className="mt-5 flex flex-col gap-4 rounded-xl border border-violet-100 bg-violet-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-violet-900">Last manual backup</p><p className="mt-1 text-xs text-violet-700">{settings.lastBackupAt ? formatDate(settings.lastBackupAt, { hour: "numeric", minute: "2-digit" }) : "No manual database backup has been downloaded yet."}</p></div><button type="button" disabled={exporting} onClick={() => void handleExport({ backup: true })} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60"><HardDriveUpload size={17} />{exporting ? "Preparing…" : "Download backup"}</button></div>
         </SectionCard>
 
-        <SectionCard icon={Download} tone="bg-blue-50 text-blue-600" title="Data export" description="Download a JSON copy of available clinic records for safe local storage.">
+        <SectionCard icon={Download} tone="bg-blue-50 text-blue-600" title="Data export" description="Download a server-generated copy of the database records for controlled offline storage.">
           <div className="grid gap-3 md:grid-cols-2">
             <ToggleRow title="Allow manual data exports" description="Let this signed-in browser download clinic record exports." checked={settings.allowDataExport} onChange={() => toggleSetting("allowDataExport")} />
-            <ToggleRow title="Include archived records" description="Add archived task records to future exports when available." checked={settings.includeArchivedInExports} onChange={() => toggleSetting("includeArchivedInExports")} />
+            <ToggleRow title="Include archived records" description="Archived patients are always included in protected database exports." checked={settings.includeArchivedInExports} onChange={() => toggleSetting("includeArchivedInExports")} />
           </div>
           <div className="mt-5 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-blue-800">Exports are downloaded to this device. Do not save them on a shared or unsecured computer.</p><button type="button" disabled={exporting || !settings.allowDataExport} onClick={() => void handleExport()} className="shrink-0 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">{exporting ? "Preparing…" : "Download export"}</button></div>
         </SectionCard>

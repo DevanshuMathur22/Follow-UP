@@ -353,6 +353,79 @@ export async function POST(request) {
       );
     }
 
+    const allowExistingAppointment =
+      body.allowExistingAppointment === true;
+
+    if (!allowExistingAppointment) {
+      const activeAppointment =
+        await prisma.appointment.findFirst({
+          where: {
+            patientId,
+            dateKey: {
+              gte: indiaDateKey(),
+            },
+            status: {
+              notIn: [
+                "Completed",
+                "Cancelled",
+                "No-show",
+              ],
+            },
+          },
+          orderBy: [
+            {
+              dateKey: "asc",
+            },
+            {
+              startTime: "asc",
+            },
+          ],
+          include: {
+            location: true,
+          },
+        });
+
+      if (activeAppointment) {
+        return Response.json(
+          {
+            success: false,
+            code:
+              "ACTIVE_APPOINTMENT_EXISTS",
+            message:
+              "This patient already has an active appointment.",
+            existingAppointment: {
+              id: activeAppointment.id,
+              bookingCode:
+                activeAppointment.bookingCode,
+              dateKey:
+                activeAppointment.dateKey,
+              startTime:
+                activeAppointment.startTime,
+              endTime:
+                activeAppointment.endTime,
+              status:
+                activeAppointment.status,
+              location:
+                activeAppointment.location
+                  ? {
+                      id:
+                        activeAppointment
+                          .location.id,
+                      name:
+                        activeAppointment
+                          .location.name,
+                      city:
+                        activeAppointment
+                          .location.city,
+                    }
+                  : null,
+            },
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const location =
       await prisma.clinicLocation.findFirst({
         where: {

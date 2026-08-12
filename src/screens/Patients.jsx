@@ -23,18 +23,26 @@ export default function Patients() {
   const [error, setError] = useState("");
   const [canArchive, setCanArchive] = useState(false);
 
-  async function loadPatients() {
+  async function loadPatients({ silent = false } = {}) {
     try {
       setError("");
-      setLoading(true);
+
+      if (!silent) {
+        setLoading(true);
+      }
+
       setPatients(await getPatients());
     } catch (loadError) {
-      setError(
-        loadError.response?.data?.message ||
-          "Patients could not be loaded.",
-      );
+      if (!silent) {
+        setError(
+          loadError.response?.data?.message ||
+            "Patients could not be loaded.",
+        );
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }
 
@@ -81,8 +89,37 @@ export default function Patients() {
   }
 
   useEffect(() => {
-    loadPatients();
-    loadAccess();
+    void loadPatients();
+    void loadAccess();
+
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void loadPatients({ silent: true });
+      }
+    };
+
+    const interval = window.setInterval(
+      refresh,
+      30_000,
+    );
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener(
+      "visibilitychange",
+      refresh,
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(
+        "focus",
+        refresh,
+      );
+      document.removeEventListener(
+        "visibilitychange",
+        refresh,
+      );
+    };
   }, []);
 
   return (
