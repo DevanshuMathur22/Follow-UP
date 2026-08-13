@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --webpack",
-   "build": "prisma generate && next build --webpack",
+    "build": "prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint ."
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@sentry/nextjs": "^10.70.0",
     "@vercel/blob": "^2.7.0",
     "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",

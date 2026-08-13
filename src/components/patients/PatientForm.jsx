@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ClipboardPlus, Save, UserRound } from "lucide-react";
+import CityStateAutocomplete from "../common/CityStateAutocomplete";
 
 const initialForm = {
   fullName: "",
@@ -167,27 +168,18 @@ export default function PatientForm({ onSubmit, loading, initialValues, onCancel
             />
           </label>
 
-          <label className="block text-sm font-medium text-slate-700">
-            City
-            <input
-              name="city"
-              value={formData.city}
-              onChange={handleChange}
-              placeholder="Enter city"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
-            />
-          </label>
-
-          <label className="block text-sm font-medium text-slate-700">
-            State
-            <input
-              name="state"
-              value={formData.state}
-              onChange={handleChange}
-              placeholder="Enter state"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
-            />
-          </label>
+          <CityStateAutocomplete
+            city={formData.city}
+            state={formData.state}
+            disabled={loading}
+            onChange={(location) =>
+              setFormData((current) => ({
+                ...current,
+                city: location.city,
+                state: location.state,
+              }))
+            }
+          />
         </div>
       </section>
 

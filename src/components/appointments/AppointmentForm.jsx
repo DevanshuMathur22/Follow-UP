@@ -15,6 +15,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import CityStateAutocomplete from "../common/CityStateAutocomplete";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -136,6 +137,7 @@ const emptyPatientForm = {
   age: "",
   gender: "",
   city: "",
+  state: "",
   category: "Other",
   diagnosis: "",
 };
@@ -727,6 +729,7 @@ export default function Appointments() {
         age: newPatient.age,
         gender: newPatient.gender || undefined,
         city: newPatient.city.trim() || form.city || undefined,
+        state: newPatient.state.trim() || undefined,
         category: newPatient.category || "Other",
         diagnosis: newPatient.diagnosis.trim() || undefined,
       });
@@ -1507,17 +1510,18 @@ export default function Appointments() {
                     </select>
                   </label>
 
-                  <label className="text-xs font-semibold text-slate-600">
-                    City
-                    <input
-                      value={newPatient.city}
-                      onChange={(event) =>
-                        updateNewPatient("city", event.target.value)
-                      }
-                      placeholder="Patient city"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
-                    />
-                  </label>
+                  <CityStateAutocomplete
+                    city={newPatient.city}
+                    state={newPatient.state}
+                    disabled={patientSaving}
+                    onChange={(location) =>
+                      setNewPatient((current) => ({
+                        ...current,
+                        city: location.city,
+                        state: location.state,
+                      }))
+                    }
+                  />
 
                   <label className="text-xs font-semibold text-slate-600">
                     Category
