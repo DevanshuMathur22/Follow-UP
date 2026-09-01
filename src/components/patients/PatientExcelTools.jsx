@@ -583,6 +583,301 @@ function autoMapping(headers) {
   return mapping;
 }
 
+function sourceColumn(headers, ...names) {
+  const targets = new Set(
+    names.map(headerKey),
+  );
+
+  return (
+    headers.find((header) =>
+      targets.has(
+        headerKey(header.label),
+      ),
+    )?.column || ""
+  );
+}
+
+function sourceCell(row, headers, ...names) {
+  const column = sourceColumn(
+    headers,
+    ...names,
+  );
+
+  return column
+    ? row[Number(column) - 1]
+    : "";
+}
+
+function isZohoSource(source) {
+  if (!source?.headers?.length) {
+    return false;
+  }
+
+  const keys = new Set(
+    source.headers.map((header) =>
+      headerKey(header.label),
+    ),
+  );
+
+  return (
+    keys.has("customer") &&
+    keys.has("customer contact number") &&
+    keys.has("booking id")
+  );
+}
+
+function zohoMapping(headers) {
+  const mapping = autoMapping(headers);
+
+  const nameColumn = sourceColumn(
+    headers,
+    "customer",
+  );
+
+  const mobileColumn = sourceColumn(
+    headers,
+    "customer contact number",
+  );
+
+  if (nameColumn) {
+    mapping.fullName =
+      String(nameColumn);
+  }
+
+  if (mobileColumn) {
+    mapping.mobile =
+      String(mobileColumn);
+
+    mapping.whatsapp =
+      String(mobileColumn);
+  }
+
+  return mapping;
+}
+
+function titleCase(value) {
+  return text(value)
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (char) => char.toUpperCase(),
+    );
+}
+
+function zohoCity(row, headers) {
+  const locationText = [
+    sourceCell(
+      row,
+      headers,
+      "consultation",
+    ),
+    sourceCell(
+      row,
+      headers,
+      "workspace",
+    ),
+  ]
+    .map(text)
+    .filter(Boolean)
+    .join(" ");
+
+  const medihub = locationText.match(
+    /(?:vs\s+)?medihub\s+([^)]+)/i,
+  );
+
+  if (medihub?.[1]) {
+    return titleCase(
+      medihub[1]
+        .replace(/\s+/g, " ")
+        .trim(),
+    );
+  }
+
+  if (/\bjaipur\b/i.test(locationText)) {
+    return "Jaipur";
+  }
+
+  return "";
+}
+
+function mergeExistingPatient(
+  patient,
+  existing,
+) {
+  if (!existing) return patient;
+
+  const next = {
+    ...patient,
+  };
+
+  [
+    "whatsapp",
+    "dob",
+    "age",
+    "gender",
+    "city",
+    "state",
+    "category",
+    "diagnosis",
+    "address",
+    "history",
+    "allergies",
+  ].forEach((key) => {
+    if (
+      next[key] === "" ||
+      next[key] === null ||
+      next[key] === undefined
+    ) {
+      next[key] =
+        existing[key] ?? "";
+    }
+  });
+
+  return next;
+}
+
+function buildPreviewRows(
+  source,
+  mapping,
+  patients,
+  keepExtra,
+  zohoMode = false,
+) {
+  const existingByMobile = new Map(
+    patients
+      .map((patient) => [
+        mobileKey(patient),
+        patient,
+      ])
+      .filter(([key]) => key),
+  );
+
+  const existingByPossible = new Map(
+    patients
+      .map((patient) => [
+        nameDobCityKey(patient),
+        patient,
+      ])
+      .filter(([key]) => key),
+  );
+
+  const uploadedMobiles = new Set();
+
+  return source.rows.map(
+    (row, index) => {
+      let patient = buildPatient(
+        row,
+        mapping,
+        source.headers,
+        keepExtra,
+      );
+
+      if (zohoMode) {
+        if (!patient.whatsapp) {
+          patient.whatsapp =
+            patient.mobile;
+        }
+
+        if (!patient.city) {
+          patient.city =
+            zohoCity(
+              row,
+              source.headers,
+            );
+        }
+
+        if (!patient.category) {
+          patient.category = "Other";
+        }
+      }
+
+      const mobile =
+        mobileKey(patient);
+
+      const possible =
+        nameDobCityKey(patient);
+
+      let existing = null;
+      let status = "new";
+      let message = "Ready to add";
+
+      if (
+        !patient.fullName ||
+        !patient.mobile
+      ) {
+        status = "invalid";
+        message =
+          "Full Name and Mobile required";
+      } else if (
+        patient.mobile.length !== 10
+      ) {
+        status = "invalid";
+        message =
+          "Mobile must be 10 digits";
+      } else if (
+        patient._dobInvalid
+      ) {
+        status = "invalid";
+        message = "Invalid DOB";
+      } else if (
+        uploadedMobiles.has(mobile)
+      ) {
+        status = "duplicate";
+        message =
+          zohoMode
+            ? "Duplicate booking — skipped"
+            : "Duplicate row in this file";
+      } else if (
+        existingByMobile.has(mobile)
+      ) {
+        existing =
+          existingByMobile.get(mobile);
+
+        status = "existing";
+        message =
+          zohoMode
+            ? "Existing patient — details retained"
+            : "Existing patient — update";
+      } else if (
+        possible &&
+        existingByPossible.has(possible)
+      ) {
+        existing =
+          existingByPossible.get(
+            possible,
+          );
+
+        status = "possible";
+        message =
+          "Possible duplicate — skipped";
+      }
+
+      if (zohoMode && existing) {
+        patient =
+          mergeExistingPatient(
+            patient,
+            existing,
+          );
+      }
+
+      if (mobile) {
+        uploadedMobiles.add(mobile);
+      }
+
+      return {
+        rowNumber:
+          source.headerRow +
+          index +
+          1,
+        patient,
+        existing,
+        status,
+        message,
+      };
+    },
+  );
+}
+
 function detectDelimiter(raw) {
   const line =
     raw
@@ -1244,20 +1539,47 @@ export default function PatientExcelTools({
             )
           : await readXlsx(file);
 
-      const nextMapping =
-        autoMapping(
-          nextSource.headers,
-        );
+              const zohoMode =
+          isZohoSource(nextSource);
 
-      setSource(nextSource);
-      setMapping(nextMapping);
-      setPreview([]);
-      setShowPreview(false);
-      setShowMapping(true);
+        const nextMapping =
+          zohoMode
+            ? zohoMapping(
+                nextSource.headers,
+              )
+            : autoMapping(
+                nextSource.headers,
+              );
 
-      toast.success(
-        `${nextSource.rows.length} rows detected`,
-      );
+        setSource(nextSource);
+        setMapping(nextMapping);
+
+        if (zohoMode) {
+          const rows =
+            buildPreviewRows(
+              nextSource,
+              nextMapping,
+              patients,
+              keepExtra,
+              true,
+            );
+
+          setPreview(rows);
+          setShowMapping(false);
+          setShowPreview(true);
+
+          toast.success(
+            `Zoho detected · ${rows.length} rows ready`,
+          );
+        } else {
+          setPreview([]);
+          setShowPreview(false);
+          setShowMapping(true);
+
+          toast.success(
+            `${nextSource.rows.length} rows detected`,
+          );
+        }
     } catch (error) {
       toast.error(
         error?.message ||
@@ -1285,113 +1607,14 @@ export default function PatientExcelTools({
       return;
     }
 
-    const existingByMobile =
-      new Map(
-        patients
-          .map((patient) => [
-            mobileKey(patient),
-            patient,
-          ])
-          .filter(([key]) => key),
+    const rows =
+      buildPreviewRows(
+        source,
+        mapping,
+        patients,
+        keepExtra,
+        isZohoSource(source),
       );
-
-    const existingByPossible =
-      new Map(
-        patients
-          .map((patient) => [
-            nameDobCityKey(patient),
-            patient,
-          ])
-          .filter(([key]) => key),
-      );
-
-    const uploadedMobiles =
-      new Set();
-
-    const rows = source.rows.map(
-      (row, index) => {
-        const patient = buildPatient(
-          row,
-          mapping,
-          source.headers,
-          keepExtra,
-        );
-
-        const mobile =
-          mobileKey(patient);
-
-        const possible =
-          nameDobCityKey(patient);
-
-        let existing = null;
-        let status = "new";
-        let message = "Ready to add";
-
-        if (
-          !patient.fullName ||
-          !patient.mobile
-        ) {
-          status = "invalid";
-          message =
-            "Full Name and Mobile required";
-        } else if (
-          patient.mobile.length !== 10
-        ) {
-          status = "invalid";
-          message =
-            "Mobile must be 10 digits";
-        } else if (
-          patient._dobInvalid
-        ) {
-          status = "invalid";
-          message = "Invalid DOB";
-        } else if (
-          uploadedMobiles.has(mobile)
-        ) {
-          status = "duplicate";
-          message =
-            "Duplicate row in this file";
-        } else if (
-          existingByMobile.has(mobile)
-        ) {
-          existing =
-            existingByMobile.get(mobile);
-
-          status = "existing";
-          message =
-            "Existing patient — update";
-        } else if (
-          possible &&
-          existingByPossible.has(
-            possible,
-          )
-        ) {
-          existing =
-            existingByPossible.get(
-              possible,
-            );
-
-          status = "possible";
-          message =
-            "Possible duplicate — skipped";
-        }
-
-        if (mobile) {
-          uploadedMobiles.add(mobile);
-        }
-
-        return {
-          rowNumber:
-            source.headerRow +
-            index +
-            1,
-          patient,
-          existing,
-          status,
-          message,
-        };
-      },
-    );
 
     setPreview(rows);
     setShowMapping(false);
