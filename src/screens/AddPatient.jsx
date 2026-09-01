@@ -12,6 +12,9 @@ import Link from "next/link";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import PatientForm from "../components/patients/PatientForm";
+import DoctorAutocomplete, {
+  DEFAULT_DOCTOR,
+} from "../components/common/DoctorAutocomplete";
 import {
   createPatient,
   createPrescription,
@@ -42,7 +45,7 @@ export default function AddPatient() {
   const [prescriptionFile, setPrescriptionFile] = useState(null);
   const [prescription, setPrescription] = useState({
     visitDate: localDate(),
-    doctor: "",
+    doctor: DEFAULT_DOCTOR,
     diagnosis: "",
     notes: "",
   });
@@ -104,7 +107,7 @@ export default function AddPatient() {
   }
 
   async function handleAddPatient(formData) {
-    let patient = null;
+    let patient;
 
     try {
       setLoading(true);
@@ -214,22 +217,16 @@ export default function AddPatient() {
               />
             </label>
 
-            <label className="text-sm font-medium text-slate-700">
-              Doctor name
-              <input
-                value={prescription.doctor}
-                maxLength={120}
-                disabled={loading}
-                onChange={(event) =>
-                  setPrescription((current) => ({
-                    ...current,
-                    doctor: event.target.value,
-                  }))
-                }
-                placeholder="Previous doctor name"
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-violet-500 disabled:opacity-60"
-              />
-            </label>
+            <DoctorAutocomplete
+              value={prescription.doctor}
+              disabled={loading}
+              onChange={(doctor) =>
+                setPrescription((current) => ({
+                  ...current,
+                  doctor,
+                }))
+              }
+            />
 
             <label className="text-sm font-medium text-slate-700">
               Diagnosis

@@ -235,7 +235,7 @@ export default function PatientPrescriptions({
       try {
         win.focus();
         win.print();
-      } catch {}
+      } catch { void 0; }
     }, 700);
   }
 

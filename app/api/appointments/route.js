@@ -12,6 +12,16 @@ import {
   permissions,
 } from "../../../src/lib/permissions";
 
+
+function indiaDateKey(value = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
 function validDateKey(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) {
     return false;

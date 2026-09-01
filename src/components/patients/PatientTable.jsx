@@ -324,7 +324,7 @@ export default function PatientTable({
               className="min-w-0 flex-1 bg-transparent outline-none"
             >
               {categories.map((item) => (
-                <option key={item}>
+                <option key={item} value={item}>
                   {item === "All"
                     ? "All categories"
                     : item}

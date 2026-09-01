@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ClipboardPlus, Save, UserRound } from "lucide-react";
 import CityStateAutocomplete from "../common/CityStateAutocomplete";
+import SearchableSelect from "../common/SearchableSelect";
 
 const initialForm = {
   fullName: "",
@@ -19,6 +20,124 @@ const initialForm = {
   allergies: "",
   remarks: "",
 };
+
+function calculateAge(value) {
+  if (!value) return "";
+
+  const dob = new Date(
+    `${value}T12:00:00`,
+  );
+
+  if (Number.isNaN(dob.getTime())) {
+    return "";
+  }
+
+  const today = new Date();
+
+  let age =
+    today.getFullYear() -
+    dob.getFullYear();
+
+  const monthDifference =
+    today.getMonth() -
+    dob.getMonth();
+
+  if (
+    monthDifference < 0 ||
+    (
+      monthDifference === 0 &&
+      today.getDate() <
+        dob.getDate()
+    )
+  ) {
+    age -= 1;
+  }
+
+  return String(
+    Math.max(0, age),
+  );
+}
+
+function dobForAge(
+  currentDob,
+  ageValue,
+) {
+  const age = Number(ageValue);
+
+  if (
+    !currentDob ||
+    !Number.isInteger(age) ||
+    age < 0 ||
+    age > 130
+  ) {
+    return currentDob;
+  }
+
+  const current = new Date(
+    `${currentDob}T12:00:00`,
+  );
+
+  if (
+    Number.isNaN(current.getTime())
+  ) {
+    return currentDob;
+  }
+
+  const today = new Date();
+  const month = current.getMonth();
+  const originalDay = current.getDate();
+
+  const birthdayPassed =
+    today.getMonth() > month ||
+    (
+      today.getMonth() === month &&
+      today.getDate() >= originalDay
+    );
+
+  const year =
+    today.getFullYear() -
+    age -
+    (birthdayPassed ? 0 : 1);
+
+  const maxDay = new Date(
+    year,
+    month + 1,
+    0,
+  ).getDate();
+
+  const day = Math.min(
+    originalDay,
+    maxDay,
+  );
+
+  return [
+    year,
+    String(month + 1).padStart(
+      2,
+      "0",
+    ),
+    String(day).padStart(
+      2,
+      "0",
+    ),
+  ].join("-");
+}
+
+function approximateBirthYear(ageValue) {
+  const age = Number(ageValue);
+
+  if (
+    !Number.isInteger(age) ||
+    age < 0 ||
+    age > 130
+  ) {
+    return "";
+  }
+
+  return String(
+    new Date().getFullYear() - age,
+  );
+}
 
 function buildFormValues(values) {
   return {
@@ -43,10 +162,52 @@ export default function PatientForm({ onSubmit, loading, initialValues, onCancel
   ];
 
   function handleChange(event) {
-    setFormData({
-      ...formData,
-      [event.target.name]: event.target.value,
-    });
+    setFormData((current) => ({
+      ...current,
+      [event.target.name]:
+        event.target.value,
+    }));
+  }
+
+  function handleAgeChange(event) {
+    const age = event.target.value;
+
+    setFormData((current) => ({
+      ...current,
+      age,
+      dob: current.dob
+        ? dobForAge(
+            current.dob,
+            age,
+          )
+        : current.dob,
+    }));
+  }
+
+  function handleDobChange(event) {
+    const dob = event.target.value;
+
+    setFormData((current) => ({
+      ...current,
+      dob,
+      age: dob
+        ? calculateAge(dob)
+        : current.age,
+    }));
+  }
+
+  function handleMobileChange(event) {
+    const mobile = event.target.value;
+
+    setFormData((current) => ({
+      ...current,
+      mobile,
+      whatsapp:
+        !current.whatsapp ||
+        current.whatsapp === current.mobile
+          ? mobile
+          : current.whatsapp,
+    }));
   }
 
   function handleSubmit(event) {
@@ -97,12 +258,23 @@ export default function PatientForm({ onSubmit, loading, initialValues, onCancel
             <input
               name="age"
               type="number"
+              min="0"
+              max="130"
               value={formData.age}
-              onChange={handleChange}
+              onChange={handleAgeChange}
               placeholder="Enter age"
               required
               className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
             />
+              {formData.age &&
+                !formData.dob && (
+                  <span className="mt-1 block text-xs font-medium text-teal-600">
+                    Approx. birth year:
+                    {approximateBirthYear(
+                      formData.age,
+                    )}
+                  </span>
+                )}
           </label>
 
           <label className="block text-sm font-medium text-slate-700">
@@ -127,7 +299,7 @@ export default function PatientForm({ onSubmit, loading, initialValues, onCancel
               name="dob"
               type="date"
               value={formData.dob}
-              onChange={handleChange}
+              onChange={handleDobChange}
               className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
             />
           </label>
@@ -138,7 +310,7 @@ export default function PatientForm({ onSubmit, loading, initialValues, onCancel
               name="mobile"
               type="tel"
               value={formData.mobile}
-              onChange={handleChange}
+              onChange={handleMobileChange}
               placeholder="+91 00000 00000"
               required
               className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-100"
@@ -201,19 +373,22 @@ export default function PatientForm({ onSubmit, loading, initialValues, onCancel
         </div>
 
         <div className="mt-6 grid gap-5 md:grid-cols-2">
-          <label className="block text-sm font-medium text-slate-700">
-            Category
-            <select
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              required
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
-            >
-              <option value="">Select category</option>
-              {categoryOptions.map((category) => <option key={category}>{category}</option>)}
-            </select>
-          </label>
+          <SearchableSelect
+            label="Category"
+            value={formData.category}
+            options={categoryOptions}
+            disabled={loading}
+            required
+            minChars={1}
+            strict
+            placeholder="Type category..."
+            onChange={(category) =>
+              setFormData((current) => ({
+                ...current,
+                category,
+              }))
+            }
+          />
 
           <label className="block text-sm font-medium text-slate-700">
             Diagnosis

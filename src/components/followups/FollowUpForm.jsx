@@ -12,6 +12,7 @@ import {
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../layout/DashboardLayout";
 import FollowUpTable from "./FollowUpTable";
+import PatientAutocomplete from "../common/PatientAutocomplete";
 import {
   createFollowUp,
   getFollowUpStatus,
@@ -19,7 +20,6 @@ import {
   getPatients,
   updateFollowUp,
 } from "../../services/clinicService";
-import { patientReference } from "../../lib/format";
 
 const tabs = [
   "All",
@@ -712,37 +712,19 @@ export default function FollowUps() {
             onSubmit={handleCreateOrReschedule}
             className="mt-6 grid gap-4 md:grid-cols-2"
           >
-            <label className="text-sm font-medium text-slate-700">
-              Patient
-              <select
-                required
-                value={formData.patientId}
-                onChange={(event) =>
-                  updateForm(
-                    "patientId",
-                    event.target.value,
-                  )
-                }
-                disabled={Boolean(
-                  editingFollowUp,
-                )}
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none transition focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <option value="">
-                  Select patient
-                </option>
-
-                {patients.map((patient) => (
-                  <option
-                    key={patient.id}
-                    value={patient.id}
-                  >
-                    {patient.fullName} ·{" "}
-                    {patientReference(patient)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <PatientAutocomplete
+              patients={patients}
+              value={formData.patientId}
+              required
+              disabled={Boolean(editingFollowUp) || saving}
+              placeholder="Type patient name, ID or mobile..."
+              onChange={(patientId) =>
+                setFormData((current) => ({
+                  ...current,
+                  patientId,
+                }))
+              }
+            />
 
             <label className="text-sm font-medium text-slate-700">
               Due date and time

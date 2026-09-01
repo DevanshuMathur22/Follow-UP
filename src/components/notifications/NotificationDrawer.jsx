@@ -66,38 +66,149 @@ export default function NotificationDrawer({
   onMarkAllRead,
 }) {
   const [open, setOpen] = useState(false);
-  const [readIds, setReadIds] = useState(() => new Set());
-  const sourceNotifications = useMemo(() => (
-    notifications.length ? notifications : fallbackNotifications(reminderCount, reminderStatus)
-  ), [notifications, reminderCount, reminderStatus]);
-  const items = useMemo(() => sourceNotifications.map((notification, index) => {
-    const id = notification.id || `${notification.type || "notification"}-${index}`;
-    return {
-      ...notification,
-      id,
-      isRead: notification.read === true || notification.isRead === true || notification.unread === false || readIds.has(id),
-    };
-  }), [readIds, sourceNotifications]);
-  const unreadItems = items.filter((item) => !item.isRead);
-  const unreadCount = notifications.length
-    ? unreadItems.length
-    : readIds.has("follow-up-attention") ? 0 : reminderCount;
+  const [readIds, setReadIds] = useState(
+    () => new Set(),
+  );
+
+  const sourceNotifications = useMemo(
+    () =>
+      notifications.length
+        ? notifications
+        : fallbackNotifications(
+            reminderCount,
+            reminderStatus,
+          ),
+    [
+      notifications,
+      reminderCount,
+      reminderStatus,
+    ],
+  );
+
+  const items = useMemo(
+    () =>
+      sourceNotifications.map(
+        (notification, index) => {
+          const id =
+            notification.id ||
+            `${notification.type || "notification"}-${index}`;
+
+          const seenKey =
+            notification.seenKey ||
+            `${id}:${notification.status || ""}:${notification.timestamp || ""}`;
+
+          return {
+            ...notification,
+            id,
+            seenKey,
+            isRead:
+              notification.read === true ||
+              notification.isRead === true ||
+              notification.unread === false ||
+              readIds.has(seenKey),
+          };
+        },
+      ),
+    [readIds, sourceNotifications],
+  );
+
+  const unreadItems = items.filter(
+    (item) => !item.isRead,
+  );
+
+  const readableUnreadItems =
+    unreadItems.filter(
+      (item) => !item.actionable,
+    );
+
+  const pendingCount = notifications.length
+    ? notifications.filter(
+        (item) => item.actionable === true,
+      ).length
+    : reminderCount;
+
+  const unreadCount = unreadItems.length;
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem(
+          "caretrack-seen-notifications",
+        ) || "[]",
+      );
+
+      setReadIds(
+        new Set(
+          Array.isArray(saved)
+            ? saved
+            : [],
+        ),
+      );
+    } catch {
+      setReadIds(new Set());
+    }
+  }, []);
 
   useEffect(() => {
     function closeOnEscape(event) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
     }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+
+    window.addEventListener(
+      "keydown",
+      closeOnEscape,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        closeOnEscape,
+      );
   }, []);
 
+  function saveSeen(next) {
+    try {
+      window.localStorage.setItem(
+        "caretrack-seen-notifications",
+        JSON.stringify(
+          [...next].slice(-500),
+        ),
+      );
+    } catch { void 0; }
+  }
+
+  function markItemsSeen(targetItems) {
+    setReadIds((current) => {
+      const next = new Set(current);
+
+      targetItems.forEach((item) => {
+        next.add(
+          item.seenKey || item.id,
+        );
+      });
+
+      saveSeen(next);
+      return next;
+    });
+  }
+
+  function toggleOpen() {
+    if (!open) {
+      markItemsSeen(items);
+    }
+
+    setOpen((current) => !current);
+  }
+
   function markRead(notification) {
-    setReadIds((current) => new Set([...current, notification.id]));
+    markItemsSeen([notification]);
     onMarkRead?.(notification);
   }
 
   function markAllRead() {
-    setReadIds(new Set(sourceNotifications.map((notification) => notification.id)));
+    markItemsSeen(items);
     onMarkAllRead?.(sourceNotifications);
   }
 
@@ -105,8 +216,8 @@ export default function NotificationDrawer({
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-label={`${unreadCount} notifications unread`}
+        onClick={toggleOpen}
+        aria-label={`${unreadCount} unread notifications`}
         aria-expanded={open}
         aria-controls="caretrack-notification-panel"
         title={reminderStatus?.lastUpdated ? `Reminders checked at ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(reminderStatus.lastUpdated)}` : "Notifications"}
@@ -123,10 +234,10 @@ export default function NotificationDrawer({
             <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-4">
               <div>
                 <h2 className="text-sm font-semibold text-slate-800">Notifications</h2>
-                <p className="mt-1 text-xs text-slate-500">{unreadCount ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}` : "You are all caught up"}</p>
+                <p className="mt-1 text-xs text-slate-500">{pendingCount ? `${pendingCount} pending follow-up${pendingCount === 1 ? "" : "s"}` : "You are all caught up"}</p>
               </div>
               <div className="flex items-center gap-1">
-                {unreadItems.length > 0 && <button type="button" onClick={markAllRead} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50">Mark all read</button>}
+                {readableUnreadItems.length > 0 && <button type="button" onClick={markAllRead} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50">Mark all read</button>}
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100" aria-label="Close notification panel"><X size={17} /></button>
               </div>
             </div>
@@ -135,16 +246,20 @@ export default function NotificationDrawer({
               {items.map((notification) => {
                 const meta = notificationMeta[notification.type] || notificationMeta.followUp;
                 const Icon = meta.icon;
+                const tone =
+                  notification.status === "Overdue"
+                    ? "bg-rose-50 text-rose-600"
+                    : meta.tone;
                 const row = (
                   <>
-                    <span className={`mt-0.5 shrink-0 rounded-xl p-2.5 ${meta.tone}`}><Icon size={17} /></span>
+                    <span className={`mt-0.5 shrink-0 rounded-xl p-2.5 ${tone}`}><Icon size={17} /></span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-start justify-between gap-3">
                         <span className="text-sm font-semibold text-slate-700">{notification.title}</span>
                         {!notification.isRead && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-indigo-500" aria-label="Unread" />}
                       </span>
                       <span className="mt-1 block text-xs text-slate-500">{notification.description}</span>
-                      <span className="mt-2 block text-[11px] font-medium text-slate-400">{notificationTime(notification.timestamp)}</span>
+                      <span className="mt-2 block text-[11px] font-medium text-slate-400">{notification.timeLabel || notificationTime(notification.timestamp)}</span>
                     </span>
                   </>
                 );

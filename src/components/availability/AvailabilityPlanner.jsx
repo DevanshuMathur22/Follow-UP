@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../layout/DashboardLayout";
+import ClinicLocationField from "./ClinicLocationField";
 import {
   createDoctorAvailability,
   getClinicLocations,
@@ -161,6 +161,57 @@ export default function AvailabilityPlanner() {
     }
   }
 
+  async function handleLocationChanged(
+    location,
+    action,
+  ) {
+    try {
+      const nextLocations =
+        await getClinicLocations();
+
+      setLocations(nextLocations || []);
+
+      const fallbackId =
+        nextLocations?.[0]?.id || "";
+
+      setWeeklyForm((current) => ({
+        ...current,
+        locationId:
+          action === "delete" &&
+          current.locationId ===
+            location.id
+            ? fallbackId
+            : action === "create"
+              ? location.id
+              : current.locationId,
+      }));
+
+      if (
+        action === "delete" &&
+        locationFilter === location.id
+      ) {
+        setLocationFilter("All");
+      }
+
+      setCustomSessions((current) =>
+        current.map((session) =>
+          action === "delete" &&
+          session.locationId ===
+            location.id
+            ? {
+                ...session,
+                locationId: fallbackId,
+              }
+            : session,
+        ),
+      );
+    } catch {
+      toast.error(
+        "Locations could not be refreshed",
+      );
+    }
+  }
+
   async function loadMonth(date = calendarDate) {
     try {
       setMonthLoading(true);
@@ -188,6 +239,7 @@ export default function AvailabilityPlanner() {
     if (tab === "month") {
       void loadMonth(calendarDate);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, calendarDate]);
 
   const visibleWeekly = useMemo(() => {
@@ -234,7 +286,7 @@ export default function AvailabilityPlanner() {
       const override = overrideMap.get(key);
 
       let sessions = [];
-      let mode = "weekly";
+      let mode;
 
       if (override?.mode === "unavailable") {
         mode = "unavailable";
@@ -710,32 +762,18 @@ export default function AvailabilityPlanner() {
               )}
 
               <div>
-                <label className="text-sm font-medium text-slate-700">
-                  Clinic / Hospital
-                </label>
-
-                <select
-                  required
+                <ClinicLocationField
+                  className="text-sm font-medium text-slate-700"
+                  locations={locations}
                   value={weeklyForm.locationId}
-                  onChange={(event) =>
-                    updateWeekly(
-                      "locationId",
-                      event.target.value,
-                    )
+                  disabled={weeklySaving}
+                  onChange={(locationId) =>
+                    updateWeekly("locationId", locationId)
                   }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-indigo-500"
-                >
-                  <option value="">Select location</option>
+                  onChanged={handleLocationChanged}
+                />
 
-                  {locations.map((location) => (
-                    <option
-                      key={location.id}
-                      value={location.id}
-                    >
-                      {location.name} · {location.city}
-                    </option>
-                  ))}
-                </select>
+
               </div>
 
               <div>

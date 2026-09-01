@@ -1,8 +1,8 @@
+import PatientAutocomplete from "../common/PatientAutocomplete";
 "use client";
 
 import { useState } from "react";
 import { Save } from "lucide-react";
-import { patientReference } from "../../lib/format";
 
 const initialForm = {
   patientId: "",
@@ -36,7 +36,19 @@ export default function InvoiceForm({ patients = [], onSubmit, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4 rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm md:grid-cols-2 xl:grid-cols-3">
-      <label className="text-sm font-medium text-slate-700">Patient<select required name="patientId" value={formData.patientId} onChange={updateField} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-emerald-500"><option value="">Select patient</option>{patients.map((patient) => <option key={patient.id} value={patient.id}>{patient.fullName} · {patientReference(patient)}</option>)}</select></label>
+      <PatientAutocomplete
+  patients={patients}
+  value={formData.patientId}
+  required
+  label="Patient"
+  placeholder="Search patient..."
+  onChange={(patientId) =>
+    setFormData((current) => ({
+      ...current,
+      patientId,
+    }))
+  }
+/>
       <label className="text-sm font-medium text-slate-700">Invoice date<input required name="date" type="date" value={formData.date} onChange={updateField} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-emerald-500" /></label>
       <label className="text-sm font-medium text-slate-700">Payment due date<input name="dueDate" type="date" value={formData.dueDate} onChange={updateField} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-emerald-500" /></label>
       <label className="text-sm font-medium text-slate-700">Service<input required name="description" value={formData.description} onChange={updateField} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-emerald-500" /></label>

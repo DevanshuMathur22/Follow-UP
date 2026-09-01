@@ -38,7 +38,7 @@ export async function POST(request) {
 
     try {
       await clearSessionCookie();
-    } catch {}
+    } catch { void 0; }
 
     return Response.json(
       {

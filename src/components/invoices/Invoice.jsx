@@ -17,6 +17,15 @@ import { formatCurrency, formatDate } from "../../lib/format";
 
 const emptyPayment = { amount: "", method: "UPI", reference: "", notes: "" };
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(
+    /[&<>'"]/g,
+    (char) =>
+      `${String.fromCharCode(38)}#${char.charCodeAt(0)};`,
+  );
+}
+
+
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -92,7 +101,7 @@ export default function Invoices() {
     const receiptWindow = window.open("", "_blank", "noopener,noreferrer");
     if (!receiptWindow) return toast.error("Please allow pop-ups to print the receipt");
     const total = Number(invoice.total ?? invoice.amount ?? 0);
-    receiptWindow.document.write(`<!doctype html><html><head><title>Receipt ${invoice.id}</title><style>body{font-family:Arial,sans-serif;padding:36px;color:#1e293b}h1{font-size:24px}table{width:100%;border-collapse:collapse;margin-top:20px}td{padding:10px;border-bottom:1px solid #e2e8f0}.total{font-size:18px;font-weight:700}</style></head><body><h1>CareTrack Clinic Receipt</h1><p>Invoice: ${invoice.id}</p><p>Patient: ${invoice.patientName || "Patient"}</p><p>Date: ${formatDate(invoice.date)}</p><table><tr><td>${invoice.description || "Clinical services"}</td><td style="text-align:right">${formatCurrency(total)}</td></tr><tr><td>Received</td><td style="text-align:right">${formatCurrency(invoice.paidAmount || 0)}</td></tr><tr class="total"><td>Pending</td><td style="text-align:right">${formatCurrency(Math.max(0, total - Number(invoice.paidAmount || 0)))}</td></tr></table><p>Payment status: ${invoice.status}</p><script>window.print();</script></body></html>`);
+    receiptWindow.document.write(`<!doctype html><html><head><title>Receipt ${escapeHtml(invoice.id)}</title><style>body{font-family:Arial,sans-serif;padding:36px;color:#1e293b}h1{font-size:24px}table{width:100%;border-collapse:collapse;margin-top:20px}td{padding:10px;border-bottom:1px solid #e2e8f0}.total{font-size:18px;font-weight:700}</style></head><body><h1>CareTrack Clinic Receipt</h1><p>Invoice: ${escapeHtml(invoice.id)}</p><p>Patient: ${escapeHtml(invoice.patientName || "Patient")}</p><p>Date: ${formatDate(invoice.date)}</p><table><tr><td>${escapeHtml(invoice.description || "Clinical services")}</td><td style="text-align:right">${formatCurrency(total)}</td></tr><tr><td>Received</td><td style="text-align:right">${formatCurrency(invoice.paidAmount || 0)}</td></tr><tr class="total"><td>Pending</td><td style="text-align:right">${formatCurrency(Math.max(0, total - Number(invoice.paidAmount || 0)))}</td></tr></table><p>Payment status: ${escapeHtml(invoice.status || "")}</p><script>window.print();</script></body></html>`);
     receiptWindow.document.close();
   }
 

@@ -35,6 +35,14 @@ function getId(record) {
   return record?.id || record?._id;
 }
 
+function announceFollowUpChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new Event("caretrack-followups-changed"),
+    );
+  }
+}
+
 function unwrap(response) {
   const payload = response?.data;
   return payload?.data ?? payload;
@@ -105,64 +113,6 @@ function normalizeCategory(category) {
     followUpIntervalDays: Number(category.followUpIntervalDays ?? category.followUpDays ?? 7),
     active: category.active !== false,
   };
-}
-
-function followUpDueDate(days) {
-  const date = new Date();
-  date.setDate(date.getDate() + Number(days || 0));
-  date.setHours(10, 0, 0, 0);
-  return date.toISOString();
-}
-
-function syncDemoCategoryFollowUps(store, categoryName, followUpIntervalDays) {
-  const dueDate = followUpDueDate(followUpIntervalDays);
-  const matchingPatients = store.patients.filter((patient) => (
-    String(patient.category || "").toLowerCase() === String(categoryName || "").toLowerCase()
-    && String(patient.status || "active").toLowerCase() !== "archived"
-  ));
-
-  matchingPatients.forEach((patient) => {
-    patient.nextFollowUp = dueDate.slice(0, 10);
-    const existing = store.followUps.find((item) => (
-      item.patientId === getId(patient)
-      && !["completed", "cancelled", "canceled"].includes(String(item.status || "").toLowerCase())
-    ));
-    if (existing) {
-      existing.dueDate = dueDate;
-      existing.status = getFollowUpStatus("scheduled", dueDate);
-      return;
-    }
-    store.followUps.unshift({
-      id: makeId("FU", store.followUps),
-      patientId: getId(patient),
-      patientName: patient.fullName,
-      mobile: patient.mobile,
-      city: patient.city,
-      category: patient.category,
-      lastVisit: patient.lastVisit || new Date().toISOString(),
-      dueDate,
-      status: getFollowUpStatus("scheduled", dueDate),
-      notes: `Auto-scheduled from ${categoryName} category rule.`,
-    });
-  });
-
-  return matchingPatients.length;
-}
-
-function clearDemoCategoryFollowUps(store, categoryName) {
-  const patientIds = new Set(store.patients
-    .filter((patient) => String(patient.category || "").toLowerCase() === String(categoryName || "").toLowerCase())
-    .map(getId));
-
-  store.patients.forEach((patient) => {
-    if (patientIds.has(getId(patient))) patient.nextFollowUp = "";
-  });
-  store.followUps.forEach((followUp) => {
-    if (patientIds.has(followUp.patientId) && String(followUp.category || "").toLowerCase() === String(categoryName || "").toLowerCase() && String(followUp.status || "").toLowerCase() === "scheduled") {
-      followUp.status = "Cancelled";
-    }
-  });
-  return patientIds.size;
 }
 
 function normalizeAppointment(item, patientMap = new Map()) {
@@ -453,7 +403,10 @@ export async function getFollowUps() {
   const result = unwrap(await api.get("/follow-ups"));
   const items = Array.isArray(result) ? result : result?.followUps || [];
   const patientMap = new Map(
-    (await getPatients()).map((patient) => [patient.id, patient])
+    items
+      .map((item) => item.patient)
+      .filter(Boolean)
+      .map((patient) => [getId(patient), normalizePatient(patient)])
   );
 
   return items.map((item) => ({
@@ -478,6 +431,8 @@ export async function createFollowUp(input) {
   const result = unwrap(await api.post("/follow-ups", apiPayload));
   const followUp = result.followUp || result;
   const patient = followUp.patient;
+
+  announceFollowUpChange();
 
   return {
     ...followUp,
@@ -505,6 +460,8 @@ export async function updateFollowUp(followUpId, updates) {
   const result = unwrap(
     await api.patch(`/follow-ups/${followUpId}`, updates)
   );
+
+  announceFollowUpChange();
 
   return result.followUp || result;
 }
@@ -647,6 +604,10 @@ export async function createPrescription(input) {
     ),
   );
 
+  if (result.followUp) {
+    announceFollowUpChange();
+  }
+
   const prescription =
     result.prescription || result;
 
@@ -745,6 +706,43 @@ export async function getClinicLocations() {
   return Array.isArray(result)
     ? result
     : result?.locations || [];
+}
+
+export async function createClinicLocation(input) {
+  const result = unwrap(
+    await api.post(
+      "/clinic-locations",
+      input,
+    ),
+  );
+
+  return result?.location || result;
+}
+
+export async function updateClinicLocation(
+  locationId,
+  input,
+) {
+  const result = unwrap(
+    await api.patch(
+      `/clinic-locations/${locationId}`,
+      input,
+    ),
+  );
+
+  return result?.location || result;
+}
+
+export async function deleteClinicLocation(
+  locationId,
+) {
+  const result = unwrap(
+    await api.delete(
+      `/clinic-locations/${locationId}`,
+    ),
+  );
+
+  return result?.location || result;
 }
 
 export async function getDoctorAvailability(locationId) {

@@ -5,13 +5,18 @@ import {
   validText,
 } from "../../../../src/lib/inputValidation";
 import { getSessionUser } from "../../../../src/lib/auth";
+import {
+  forbiddenResponse,
+  hasPermission,
+  permissions,
+} from "../../../../src/lib/permissions";
 import prisma from "../../../../src/lib/prisma";
 import { logActivity } from "../../../../src/lib/activityLog";
 
 const statuses = ["Scheduled", "Completed", "Cancelled"];
 const priorities = ["low", "medium", "high"];
 const types = ["call", "visit", "message", "email"];
-const sources = ["manual", "category"];
+const sources = ["manual", "category", "prescription"];
 
 const retryOutcomes = new Set([
   "no answer",
@@ -56,30 +61,6 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function syncPatientNextFollowUp(patientId) {
-  const next = await prisma.followUp.findFirst({
-    where: {
-      patientId,
-      status: "Scheduled",
-    },
-    orderBy: {
-      dueDate: "asc",
-    },
-    select: {
-      dueDate: true,
-    },
-  });
-
-  await prisma.patient.update({
-    where: {
-      id: patientId,
-    },
-    data: {
-      nextFollowUp: next?.dueDate || null,
-    },
-  });
-}
-
 export async function PATCH(request, { params }) {
   const originError = validateWriteOrigin(request);
 
@@ -98,6 +79,15 @@ export async function PATCH(request, { params }) {
         },
         { status: 401 },
       );
+    }
+
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.MANAGE_FOLLOW_UPS,
+      )
+    ) {
+      return forbiddenResponse();
     }
 
     const { followUpId } = await params;

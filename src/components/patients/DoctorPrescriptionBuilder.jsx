@@ -106,6 +106,40 @@ function printDate(value) {
   });
 }
 
+function suggestedNextVisit({ months = 0, days = 0 } = {}) {
+  const today = new Date();
+  const target = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+
+  if (months) {
+    const originalDay = target.getDate();
+
+    target.setDate(1);
+    target.setMonth(target.getMonth() + months);
+
+    const lastDay = new Date(
+      target.getFullYear(),
+      target.getMonth() + 1,
+      0,
+    ).getDate();
+
+    target.setDate(Math.min(originalDay, lastDay));
+  }
+
+  if (days) {
+    target.setDate(target.getDate() + days);
+  }
+
+  const offset = target.getTimezoneOffset() * 60000;
+
+  return new Date(target.getTime() - offset)
+    .toISOString()
+    .slice(0, 10);
+}
+
 function nextVisitLabel(value) {
   if (!value) return "";
 
@@ -635,7 +669,9 @@ export default function DoctorPrescriptionBuilder({
         previousPrescription
           ?.testsPrescribed ||
         "",
-      nextVisit: "",
+      nextVisit: suggestedNextVisit({
+        months: 1,
+      }),
     }),
     [
       patient?.diagnosis,
@@ -741,7 +777,7 @@ export default function DoctorPrescriptionBuilder({
           ),
         );
       }
-    } catch {}
+    } catch { void 0; }
   }, [draftKey, initial]);
 
   useEffect(() => {
@@ -755,7 +791,7 @@ export default function DoctorPrescriptionBuilder({
           medicines,
         }),
       );
-    } catch {}
+    } catch { void 0; }
   }, [
     draftKey,
     form,
@@ -994,7 +1030,7 @@ export default function DoctorPrescriptionBuilder({
         localStorage.removeItem(
           draftKey,
         );
-      } catch {}
+      } catch { void 0; }
 
       requestIdRef.current =
         createRequestId();
@@ -1486,22 +1522,98 @@ export default function DoctorPrescriptionBuilder({
             />
           </label>
 
-          <label className="text-xs font-semibold text-slate-600">
-            Next Visit
+          <div className="md:col-span-2">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">
+                  Next Visit
 
-            <input
-              type="date"
-              min={localDate()}
-              value={form.nextVisit}
-              onChange={(event) =>
-                updateField(
-                  "nextVisit",
-                  event.target.value,
-                )
-              }
-              className="mt-1.5 w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
+                  <input
+                    type="date"
+                    min={localDate()}
+                    value={form.nextVisit}
+                    onChange={(event) =>
+                      updateField(
+                        "nextVisit",
+                        event.target.value,
+                      )
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateField(
+                      "nextVisit",
+                      "",
+                    )
+                  }
+                  className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  {
+                    label: "15 Days",
+                    value: suggestedNextVisit({
+                      days: 15,
+                    }),
+                  },
+                  {
+                    label: "1 Month",
+                    value: suggestedNextVisit({
+                      months: 1,
+                    }),
+                  },
+                  {
+                    label: "2 Months",
+                    value: suggestedNextVisit({
+                      months: 2,
+                    }),
+                  },
+                  {
+                    label: "3 Months",
+                    value: suggestedNextVisit({
+                      months: 3,
+                    }),
+                  },
+                  {
+                    label: "6 Months",
+                    value: suggestedNextVisit({
+                      months: 6,
+                    }),
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() =>
+                      updateField(
+                        "nextVisit",
+                        option.value,
+                      )
+                    }
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      form.nextVisit === option.value
+                        ? "border-indigo-600 bg-indigo-600 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[11px] leading-5 text-slate-400">
+                Default: 1 month. You can choose another interval or select any date manually. Saving this prescription will update the patient&apos;s follow-up.
+              </p>
+            </div>
+          </div>
         </section>
       </div>
 

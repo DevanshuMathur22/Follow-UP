@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Eye,
   FileCheck2,
@@ -225,6 +225,8 @@ function DynamicField({ field, value, onChange }) {
     "mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm outline-none focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100";
 
   if (field.type === "select") {
+
+
     return (
       <select
         required={field.required}
@@ -276,6 +278,30 @@ export default function Certificates() {
   const [patientSearch, setPatientSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [showPatients, setShowPatients] = useState(false);
+  const patientSearchRef = useRef(null);
+
+  useEffect(() => {
+    function closePatientSearch(event) {
+      if (
+        patientSearchRef.current &&
+        !patientSearchRef.current.contains(event.target)
+      ) {
+        setShowPatients(false);
+      }
+    }
+
+    document.addEventListener(
+      "mousedown",
+      closePatientSearch,
+    );
+
+    return () =>
+      document.removeEventListener(
+        "mousedown",
+        closePatientSearch,
+      );
+  }, []);
+
 
   const [issuedAt, setIssuedAt] = useState(localDate());
   const [fieldValues, setFieldValues] = useState({});
@@ -544,7 +570,7 @@ export default function Certificates() {
               ))}
             </select>
 
-            <div className="relative mt-4">
+            <div ref={patientSearchRef} className="relative mt-4">
               <Search
                 size={17}
                 className="absolute left-3.5 top-3.5 text-slate-400"

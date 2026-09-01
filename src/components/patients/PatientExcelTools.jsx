@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import {
-  Download,
   FileDown,
   FileSpreadsheet,
   Upload,
@@ -134,7 +133,7 @@ function normalizeDob(value) {
   const raw = text(value);
 
   let match = raw.match(
-    /^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/,
+    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/,
   );
 
   if (match) {
@@ -146,7 +145,7 @@ function normalizeDob(value) {
   }
 
   match = raw.match(
-    /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/,
+    /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/,
   );
 
   if (match) {
@@ -302,58 +301,6 @@ export default function PatientExcelTools({
     useState(false);
   const [importing, setImporting] =
     useState(false);
-
-  async function downloadTemplate() {
-    try {
-      const ExcelJS = await excelLibrary();
-      const workbook = new ExcelJS.Workbook();
-      const sheet =
-        workbook.addWorksheet("Patients");
-
-      sheet.addRow(HEADERS);
-
-      sheet.columns = [
-        { width: 28 },
-        { width: 17 },
-        { width: 17 },
-        { width: 14 },
-        { width: 9 },
-        { width: 12 },
-        { width: 18 },
-        { width: 18 },
-        { width: 20 },
-        { width: 28 },
-        { width: 35 },
-        { width: 35 },
-        { width: 28 },
-        { width: 35 },
-      ];
-
-      const header = sheet.getRow(1);
-      header.font = { bold: true };
-      header.height = 22;
-      sheet.views = [
-        {
-          state: "frozen",
-          ySplit: 1,
-        },
-      ];
-
-      const buffer =
-        await workbook.xlsx.writeBuffer();
-
-      downloadBlob(
-        new Blob([buffer], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        }),
-        "patient-import-template.xlsx",
-      );
-    } catch {
-      toast.error(
-        "Unable to create Excel template",
-      );
-    }
-  }
 
   async function exportPatients() {
     try {
@@ -686,10 +633,8 @@ export default function PatientExcelTools({
 
       for (const item of rows) {
         try {
-          const {
-            _dobInvalid,
-            ...patient
-          } = item.patient;
+          const patient = { ...item.patient };
+            delete patient._dobInvalid;
 
           await createPatient(patient);
 
@@ -748,14 +693,6 @@ export default function PatientExcelTools({
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={downloadTemplate}
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-        >
-          <Download size={17} />
-          Template
-        </button>
 
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-3 text-sm font-semibold text-teal-700 transition hover:bg-teal-100">
           <input

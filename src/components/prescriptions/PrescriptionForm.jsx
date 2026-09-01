@@ -1,5 +1,9 @@
 "use client";
 
+import DoctorAutocomplete, {
+  DEFAULT_DOCTOR,
+} from "../common/DoctorAutocomplete";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -405,9 +409,15 @@ export default function PrescriptionForm({
           <label className="block text-sm font-medium text-slate-700">Visit date
             <input name="visitDate" type="date" value={formData.visitDate} onChange={handleFormChange} required className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100" />
           </label>
-          <label className="block text-sm font-medium text-slate-700">Doctor name
-            <input name="doctor" value={formData.doctor} onChange={handleFormChange} placeholder="Dr. name" className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100" />
-          </label>
+          <DoctorAutocomplete
+  value={formData.doctor || DEFAULT_DOCTOR}
+  onChange={(doctor) =>
+    setFormData((current) => ({
+      ...current,
+      doctor,
+    }))
+  }
+/>
         </div>
         <div className="mt-5 grid gap-5 md:grid-cols-2">
           <label className="block text-sm font-medium text-slate-700">Diagnosis

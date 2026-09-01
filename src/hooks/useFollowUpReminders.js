@@ -182,12 +182,37 @@ export default function useFollowUpReminders({
       if (document.visibilityState === "visible") void refresh();
     };
 
-    const intervalId = window.setInterval(poll, resolvedPollInterval);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const refreshWhenChanged = () => {
+      void refresh();
+    };
+
+    const intervalId = window.setInterval(
+      poll,
+      resolvedPollInterval,
+    );
+
+    document.addEventListener(
+      "visibilitychange",
+      refreshWhenVisible,
+    );
+
+    window.addEventListener(
+      "caretrack-followups-changed",
+      refreshWhenChanged,
+    );
 
     return () => {
       window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+
+      document.removeEventListener(
+        "visibilitychange",
+        refreshWhenVisible,
+      );
+
+      window.removeEventListener(
+        "caretrack-followups-changed",
+        refreshWhenChanged,
+      );
     };
   }, [enabled, refresh, resolvedPollInterval]);
 

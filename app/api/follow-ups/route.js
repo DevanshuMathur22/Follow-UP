@@ -5,6 +5,11 @@ import {
   validText,
 } from "../../../src/lib/inputValidation";
 import { getSessionUser } from "../../../src/lib/auth";
+import {
+  forbiddenResponse,
+  hasPermission,
+  permissions,
+} from "../../../src/lib/permissions";
 import prisma from "../../../src/lib/prisma";
 import { logActivity } from "../../../src/lib/activityLog";
 
@@ -53,6 +58,15 @@ export async function GET() {
       );
     }
 
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.MANAGE_FOLLOW_UPS,
+      )
+    ) {
+      return forbiddenResponse();
+    }
+
     const followUps = await prisma.followUp.findMany({
       include: {
         patient: true,
@@ -97,6 +111,15 @@ export async function POST(request) {
         },
         { status: 401 },
       );
+    }
+
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.MANAGE_FOLLOW_UPS,
+      )
+    ) {
+      return forbiddenResponse();
     }
 
     const { data: body, error: bodyError } =

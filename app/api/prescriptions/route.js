@@ -373,9 +373,23 @@ export async function POST(request) {
       formData.get("testsPrescribed"),
     );
 
-    const nextVisit = parseDate(
+    const nextVisitValue = cleanText(
       formData.get("nextVisit"),
     );
+
+    const nextVisit = parseDate(
+      nextVisitValue,
+    );
+
+    const nextVisitFollowUpDate =
+      nextVisitValue &&
+      /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(
+        nextVisitValue,
+      )
+        ? new Date(
+            `${nextVisitValue}T09:00:00+05:30`,
+          )
+        : nextVisit;
 
     if (
       recordType === "generated" &&
@@ -624,79 +638,169 @@ export async function POST(request) {
       };
     }
 
-    if (recordType === "generated") {
-      try {
-        await prisma.prescriptionSaveRequest.create({
-          data: {
-            id: requestId,
-            patientId,
-          },
-        });
-      } catch (requestError) {
-        if (requestError?.code === "P2002") {
-          return Response.json(
-            {
-              success: false,
-              message:
-                "This prescription has already been submitted. Refresh patient history before saving again.",
-            },
-            { status: 409 },
-          );
-        }
-
-        throw requestError;
-      }
-    }
-
     let prescription;
+    let prescriptionFollowUp = null;
+    let prescriptionFollowUpAction = "";
 
     try {
-      prescription = await prisma.prescription.create({
-        data: {
-          patientId,
-          recordType,
-          issuedAt,
-          doctorName,
-          diagnosis,
-          notes,
-          complaints,
-          historyOfPresentIllness,
-          pastFamilyHistory,
-          examination,
-          medicines,
-          advice,
-          testsPrescribed,
-          nextVisit,
-          ...attachmentData,
-          createdById: sessionUser.id || null,
+      const result = await prisma.$transaction(
+        async (tx) => {
+          if (recordType === "generated") {
+            await tx.prescriptionSaveRequest.create({
+              data: {
+                id: requestId,
+                patientId,
+              },
+            });
+          }
+
+          const createdPrescription =
+            await tx.prescription.create({
+              data: {
+                patientId,
+                recordType,
+                issuedAt,
+                doctorName,
+                diagnosis,
+                notes,
+                complaints,
+                historyOfPresentIllness,
+                pastFamilyHistory,
+                examination,
+                medicines,
+                advice,
+                testsPrescribed,
+                nextVisit,
+                ...attachmentData,
+                createdById:
+                  sessionUser.id || null,
+              },
+              include: {
+                patient: {
+                  select: {
+                    id: true,
+                    patientCode: true,
+                    fullName: true,
+                    mobile: true,
+                    age: true,
+                    gender: true,
+                    category: true,
+                    diagnosis: true,
+                  },
+                },
+              },
+            });
+
+          let followUp = null;
+          let followUpAction = "";
+
+          if (
+            recordType === "generated" &&
+            nextVisitFollowUpDate
+          ) {
+            const existingFollowUp =
+              await tx.followUp.findFirst({
+                where: {
+                  patientId,
+                  status: "Scheduled",
+                  source: "prescription",
+                },
+                orderBy: {
+                  dueDate: "asc",
+                },
+              });
+
+            if (existingFollowUp) {
+              followUp =
+                await tx.followUp.update({
+                  where: {
+                    id: existingFollowUp.id,
+                  },
+                  data: {
+                    dueDate:
+                      nextVisitFollowUpDate,
+                    type: "visit",
+                    priority: "medium",
+                    notes:
+                      "Next visit from latest prescription",
+                  },
+                });
+
+              followUpAction = "rescheduled";
+            } else {
+              followUp =
+                await tx.followUp.create({
+                  data: {
+                    patientId,
+                    dueDate:
+                      nextVisitFollowUpDate,
+                    type: "visit",
+                    priority: "medium",
+                    status: "Scheduled",
+                    source: "prescription",
+                    notes:
+                      "Next visit from prescription",
+                  },
+                });
+
+              followUpAction = "scheduled";
+            }
+
+            const nearest =
+              await tx.followUp.findFirst({
+                where: {
+                  patientId,
+                  status: "Scheduled",
+                },
+                orderBy: {
+                  dueDate: "asc",
+                },
+                select: {
+                  dueDate: true,
+                },
+              });
+
+            await tx.patient.update({
+              where: {
+                id: patientId,
+              },
+              data: {
+                nextFollowUp:
+                  nearest?.dueDate || null,
+              },
+            });
+          }
+
+          return {
+            prescription:
+              createdPrescription,
+            followUp,
+            followUpAction,
+          };
         },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              patientCode: true,
-              fullName: true,
-              mobile: true,
-              age: true,
-              gender: true,
-              category: true,
-              diagnosis: true,
-            },
-          },
-        },
-      });
+      );
+
+      prescription =
+        result.prescription;
+
+      prescriptionFollowUp =
+        result.followUp;
+
+      prescriptionFollowUpAction =
+        result.followUpAction;
     } catch (createError) {
       if (
         recordType === "generated" &&
-        requestId
+        createError?.code === "P2002"
       ) {
-        try {
-          await prisma.prescriptionSaveRequest.delete({
-            where: {
-              id: requestId,
-            },
-          });
-        } catch {}
+        return Response.json(
+          {
+            success: false,
+            message:
+              "This prescription has already been submitted. Refresh patient history before saving again.",
+          },
+          { status: 409 },
+        );
       }
 
       throw createError;
@@ -835,11 +939,35 @@ export async function POST(request) {
       relatedPath: `/patients/${patientId}`,
     });
 
+    if (prescriptionFollowUp) {
+      await logActivity({
+        actor: sessionUser,
+        module: "follow-up",
+        action:
+          prescriptionFollowUpAction ||
+          "scheduled",
+        title:
+          prescriptionFollowUpAction ===
+          "rescheduled"
+            ? "Prescription follow-up updated"
+            : "Prescription follow-up scheduled",
+        description:
+          `${patient.fullName} · Next visit from prescription`,
+        patientId,
+        recordId:
+          prescriptionFollowUp.id,
+        relatedPath:
+          `/patients/${patientId}`,
+      });
+    }
+
     return Response.json(
       {
         success: true,
         prescription:
           serializePrescription(prescription),
+        followUp:
+          prescriptionFollowUp,
       },
       { status: 201 },
     );

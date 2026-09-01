@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -37,6 +37,149 @@ const standardPlaceholders = [
   "{{patientMobile}}",
   "{{patientCategory}}",
   "{{patientDiagnosis}}",
+];
+
+const presetTemplates = [
+  {
+    id: "medical",
+    name: "Medical Certificate",
+    title: "MEDICAL CERTIFICATE",
+    description: "General medical certificate",
+    bodyTemplate:
+      "This is to certify that {{patientName}}, aged {{patientAge}} years, is under medical care for {{diagnosis}}. The patient has been advised rest from {{fromDate}} to {{toDate}}.",
+    fields: [
+      {
+        key: "diagnosis",
+        label: "Diagnosis",
+        type: "text",
+        required: true,
+        source: "patient.diagnosis",
+        placeholder: "Diagnosis",
+        options: [],
+      },
+      {
+        key: "fromDate",
+        label: "Rest from",
+        type: "text",
+        required: true,
+        source: "",
+        placeholder: "DD/MM/YYYY",
+        options: [],
+      },
+      {
+        key: "toDate",
+        label: "Rest until",
+        type: "text",
+        required: true,
+        source: "",
+        placeholder: "DD/MM/YYYY",
+        options: [],
+      },
+    ],
+  },
+  {
+    id: "fitness",
+    name: "Fitness Certificate",
+    title: "FITNESS CERTIFICATE",
+    description: "Fitness to resume work or normal duties",
+    bodyTemplate:
+      "This is to certify that {{patientName}}, aged {{patientAge}} years, has been examined and is medically fit to resume normal duties from {{fitFromDate}}.",
+    fields: [
+      {
+        key: "fitFromDate",
+        label: "Fit from date",
+        type: "text",
+        required: true,
+        source: "",
+        placeholder: "DD/MM/YYYY",
+        options: [],
+      },
+    ],
+  },
+  {
+    id: "sick-leave",
+    name: "Sick Leave Certificate",
+    title: "MEDICAL LEAVE CERTIFICATE",
+    description: "Medical leave recommendation",
+    bodyTemplate:
+      "This is to certify that {{patientName}}, aged {{patientAge}} years, is suffering from {{diagnosis}} and has been advised medical leave from {{leaveFrom}} to {{leaveTo}}.",
+    fields: [
+      {
+        key: "diagnosis",
+        label: "Diagnosis",
+        type: "text",
+        required: true,
+        source: "patient.diagnosis",
+        placeholder: "Diagnosis",
+        options: [],
+      },
+      {
+        key: "leaveFrom",
+        label: "Leave from",
+        type: "text",
+        required: true,
+        source: "",
+        placeholder: "DD/MM/YYYY",
+        options: [],
+      },
+      {
+        key: "leaveTo",
+        label: "Leave until",
+        type: "text",
+        required: true,
+        source: "",
+        placeholder: "DD/MM/YYYY",
+        options: [],
+      },
+    ],
+  },
+  {
+    id: "unable-sign",
+    name: "Unable to Sign Certificate",
+    title: "TO WHOMSOEVER IT MAY CONCERN",
+    description: "For a patient unable to provide a signature",
+    bodyTemplate:
+      "This is to certify that {{patientName}}, aged {{patientAge}} years, is presently unable to provide a signature due to {{reason}}.",
+    fields: [
+      {
+        key: "reason",
+        label: "Reason",
+        type: "textarea",
+        required: true,
+        source: "",
+        placeholder: "Clinical reason",
+        options: [],
+      },
+    ],
+  },
+  {
+    id: "under-treatment",
+    name: "Under Treatment Certificate",
+    title: "TO WHOMSOEVER IT MAY CONCERN",
+    description: "Confirms that the patient is under medical treatment",
+    bodyTemplate:
+      "This is to certify that {{patientName}}, aged {{patientAge}} years, is currently under my medical care for {{diagnosis}} and has been receiving treatment since {{treatmentSince}}.",
+    fields: [
+      {
+        key: "diagnosis",
+        label: "Diagnosis",
+        type: "text",
+        required: true,
+        source: "patient.diagnosis",
+        placeholder: "Diagnosis",
+        options: [],
+      },
+      {
+        key: "treatmentSince",
+        label: "Under treatment since",
+        type: "text",
+        required: true,
+        source: "",
+        placeholder: "DD/MM/YYYY",
+        options: [],
+      },
+    ],
+  },
 ];
 
 function emptyField() {
@@ -79,6 +222,8 @@ export default function CertificateTemplateManager() {
   const [form, setForm] = useState(emptyTemplate);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(true);
+  const [presetId, setPresetId] = useState("");
+  const importFileRef = useRef(null);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -99,13 +244,76 @@ export default function CertificateTemplateManager() {
   function startNew() {
     setSelectedId("");
     setCreating(true);
+    setPresetId("");
     setForm(emptyTemplate);
   }
 
   function editTemplate(template) {
     setSelectedId(template.id);
     setCreating(false);
+    setPresetId("");
     setForm(normalizeTemplate(template));
+  }
+
+
+  async function importTemplateFile(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const source =
+        parsed?.template || parsed;
+
+      if (
+        !source ||
+        typeof source !== "object" ||
+        !source.bodyTemplate
+      ) {
+        throw new Error(
+          "Invalid certificate template file",
+        );
+      }
+
+      setSelectedId("");
+      setCreating(true);
+      setPresetId("");
+      setForm(
+        normalizeTemplate(source),
+      );
+
+      toast.success(
+        "Template imported from laptop",
+      );
+    } catch (error) {
+      toast.error(
+        error.message ||
+          "Unable to import template file",
+      );
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function importPreset() {
+    const preset = presetTemplates.find(
+      (item) => item.id === presetId,
+    );
+
+    if (!preset) {
+      toast.error("Select a ready-made template");
+      return;
+    }
+
+    setSelectedId("");
+    setCreating(true);
+    setForm(normalizeTemplate(preset));
+
+    toast.success(
+      "Template imported. Edit it and save when ready.",
+    );
   }
 
   function patchField(index, key, value) {
@@ -389,6 +597,79 @@ export default function CertificateTemplateManager() {
               </button>
             )}
           </div>
+
+
+            {creating && (
+              <div className="mt-6 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                <p className="text-sm font-semibold text-slate-800">
+                  Import Ready-made Template
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Select a ready-made format, edit its name or wording, then save it as your own template.
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    ref={importFileRef}
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={(event) =>
+                      void importTemplateFile(event)
+                    }
+                    className="hidden"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      importFileRef.current?.click()
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50"
+                  >
+                    <FilePlus2 size={17} />
+                    Import from Laptop
+                  </button>
+
+                  <span className="text-xs text-slate-400">
+                    JSON template file
+                  </span>
+                </div>
+
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <select
+                    value={presetId}
+                    onChange={(event) =>
+                      setPresetId(event.target.value)
+                    }
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm outline-none focus:border-indigo-500"
+                  >
+                    <option value="">
+                      Select ready-made certificate
+                    </option>
+
+                    {presetTemplates.map((preset) => (
+                      <option
+                        key={preset.id}
+                        value={preset.id}
+                      >
+                        {preset.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    disabled={!presetId}
+                    onClick={importPreset}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FilePlus2 size={17} />
+                    Import Preset
+                  </button>
+                </div>
+              </div>
+            )}
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">

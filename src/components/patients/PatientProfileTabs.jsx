@@ -277,7 +277,6 @@ export default function PatientProfileTabs({
             priority: followUpForm.priority,
             notes: followUpForm.notes.trim(),
             status: "Scheduled",
-            source: "manual",
             expectedUpdatedAt:
               nextScheduledFollowUp.updatedAt,
           },

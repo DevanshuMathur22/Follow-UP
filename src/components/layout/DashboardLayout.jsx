@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import useFollowUpReminders from "../../hooks/useFollowUpReminders";
-import { getNotifications, markAllNotificationsRead, markNotificationRead } from "../../services/clinicService";
 import { getCurrentUser } from "../../services/authService";
 
 export default function DashboardLayout({ children, focusMode = false }) {
@@ -15,8 +14,80 @@ export default function DashboardLayout({ children, focusMode = false }) {
   const [sessionUser, setSessionUser] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
-  const [notifications, setNotifications] = useState([]);
-  const reminders = useFollowUpReminders({ enabled: ready && remindersEnabled, clockInterval: 1_000 });
+  const reminders = useFollowUpReminders({
+    enabled: ready && remindersEnabled,
+    pollInterval: 15_000,
+  });
+
+  const liveNotifications = useMemo(
+    () =>
+      reminders.followUps
+        .filter(
+          (followUp) =>
+            !["Completed", "Cancelled"].includes(
+              followUp.status,
+            ),
+        )
+        .sort((first, second) => {
+          const rank = {
+            Overdue: 0,
+            Today: 1,
+            Upcoming: 2,
+          };
+
+          const statusDifference =
+            (rank[first.status] ?? 3) -
+            (rank[second.status] ?? 3);
+
+          if (statusDifference) {
+            return statusDifference;
+          }
+
+          return (
+            new Date(first.dueDate || 0).getTime() -
+            new Date(second.dueDate || 0).getTime()
+          );
+        })
+        .map((followUp) => {
+        const dueDate = followUp.dueDate
+          ? new Date(followUp.dueDate)
+          : null;
+
+        const timeLabel =
+          dueDate && !Number.isNaN(dueDate.getTime())
+            ? new Intl.DateTimeFormat("en-IN", {
+                day: "2-digit",
+                month: "short",
+                hour: "numeric",
+                minute: "2-digit",
+              }).format(dueDate)
+            : "Due now";
+
+        const type = String(
+          followUp.type || "call",
+        );
+
+        return {
+          id: `follow-up-${followUp.id}`,
+          type: "followUp",
+          title: `${followUp.patientName || "Patient"} · ${followUp.status}`,
+          description: `${type.charAt(0).toUpperCase()}${type.slice(1)} follow-up${
+            followUp.category
+              ? ` · ${followUp.category}`
+              : ""
+          }`,
+          href: followUp.patientId
+            ? `/patients/${followUp.patientId}`
+            : "/follow-ups",
+          timestamp: followUp.dueDate,
+          timeLabel,
+          status: followUp.status,
+          actionable: true,
+          unread: true,
+        };
+      }),
+    [reminders.followUps],
+  );
 
   useEffect(() => {
     let active = true;
@@ -65,44 +136,6 @@ export default function DashboardLayout({ children, focusMode = false }) {
     return () => window.removeEventListener("caretrack-settings-changed", syncReminderSetting);
   }, []);
 
-  useEffect(() => {
-    if (!ready) return undefined;
-    let active = true;
-    async function loadNotifications() {
-      try {
-        const data = await getNotifications();
-        if (active) setNotifications(data);
-      } catch {
-        // Follow-up reminders remain available even if the notification feed is offline.
-      }
-    }
-    void loadNotifications();
-    const interval = window.setInterval(loadNotifications, 60_000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [ready]);
-
-  async function handleMarkRead(notification) {
-    if (notification.id?.startsWith("follow-up-")) return;
-    try {
-      await markNotificationRead(notification.id);
-      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, isRead: true, read: true, unread: false } : item));
-    } catch {
-      // The drawer still tracks the read state locally.
-    }
-  }
-
-  async function handleMarkAllRead() {
-    try {
-      await markAllNotificationsRead();
-      setNotifications((current) => current.map((item) => ({ ...item, isRead: true, read: true, unread: false })));
-    } catch {
-      // The drawer still tracks the read state locally.
-    }
-  }
-
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
@@ -145,11 +178,9 @@ export default function DashboardLayout({ children, focusMode = false }) {
       <div className="min-w-0 flex-1">
         <Header
           onMenuClick={() => setMobileNavOpen(true)}
-          reminderCount={remindersEnabled ? reminders.counts.needsAttention : 0}
+          reminderCount={remindersEnabled ? liveNotifications.length : 0}
           reminderStatus={reminders.status}
-          notifications={notifications}
-          onMarkRead={handleMarkRead}
-          onMarkAllRead={handleMarkAllRead}
+          notifications={liveNotifications}
         />
 
         <main className="p-5 sm:p-8 lg:p-10">

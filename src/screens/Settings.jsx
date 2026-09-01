@@ -256,7 +256,7 @@ export default function Settings() {
 
           message =
             payload?.message || message;
-        } catch {}
+        } catch { void 0; }
 
         throw new Error(message);
       }

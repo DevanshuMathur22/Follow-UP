@@ -2,13 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarDays,
   CheckCircle2,
-  Clock3,
   ExternalLink,
   MapPin,
-  MessageCircle,
-  Phone,
   Plus,
   RefreshCw,
   Search,
@@ -30,17 +26,6 @@ import {
   getPatients,
   updateAppointment,
 } from "../../services/clinicService";
-
-const statuses = [
-  "Booked",
-  "Confirmed",
-  "Checked-in",
-  "Waiting",
-  "With Doctor",
-  "Completed",
-  "Cancelled",
-  "No-show",
-];
 
 const visitTypes = [
   ["consultation", "New Consultation"],
@@ -98,21 +83,6 @@ function statusTone(status) {
   return "bg-slate-100 text-slate-600";
 }
 
-function digits(value) {
-  return String(value || "").replace(/\D/g, "");
-}
-
-function whatsappNumber(value) {
-  const number = digits(value);
-
-  if (number.length === 10) return `91${number}`;
-  if (number.length === 11 && number.startsWith("0")) {
-    return `91${number.slice(1)}`;
-  }
-
-  return number;
-}
-
 function appointmentPatientName(item) {
   return item.patientName || item.patient?.fullName || "Patient";
 }
@@ -167,7 +137,7 @@ export default function Appointments() {
   const [slotsLoading, setSlotsLoading] = useState(false);
 
   const [dateSlots, setDateSlots] = useState([]);
-  const [dateScheduleMode, setDateScheduleMode] = useState("");
+  const [, setDateScheduleMode] = useState("");
   const [dateScheduleLoading, setDateScheduleLoading] = useState(false);
 
   const [showNewPatient, setShowNewPatient] = useState(false);
@@ -226,7 +196,7 @@ export default function Appointments() {
     try {
       const patientData = await getPatients();
       setPatients(patientData || []);
-    } catch {}
+    } catch { void 0; }
   }
 
   async function loadSearchAppointments() {
@@ -237,7 +207,7 @@ export default function Appointments() {
         );
 
       setSearchAppointments(data || []);
-    } catch {}
+    } catch { void 0; }
   }
 
   async function loadDateSchedule(dateKey) {
@@ -298,6 +268,7 @@ export default function Appointments() {
 
   useEffect(() => {
     void loadAppointments(date);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
   useEffect(() => {
@@ -311,9 +282,10 @@ export default function Appointments() {
       });
 
       void loadSearchAppointments();
-    }, 5000);
+    }, 15000);
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
   useEffect(() => {
@@ -360,15 +332,6 @@ export default function Appointments() {
     setShowForm(true);
   }, [patients]);
 
-  const cities = useMemo(
-    () => [
-      "All",
-      ...Array.from(
-        new Set(locations.map((item) => item.city).filter(Boolean)),
-      ).sort(),
-    ],
-    [locations],
-  );
 
   const availableLocationIds = useMemo(
     () =>
@@ -427,13 +390,6 @@ export default function Appointments() {
     });
   }, [appointments, cityFilter, locationFilter]);
 
-  const availableLocations = useMemo(
-    () =>
-      cityFilter === "All"
-        ? locations
-        : locations.filter((item) => item.city === cityFilter),
-    [locations, cityFilter],
-  );
 
   const activeAppointments = useMemo(
     () =>
@@ -1732,10 +1688,6 @@ export default function Appointments() {
                   {group.items.map((appointment, index) => {
                     const mobile =
                       appointment.patient?.mobile || "";
-
-                    const whatsapp = whatsappNumber(
-                      appointment.patient?.whatsapp || mobile,
-                    );
 
                     return (
                       <article
