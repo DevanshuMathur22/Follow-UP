@@ -21,7 +21,12 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../components/layout/DashboardLayout";
-import { changePassword } from "../services/authService";
+import {
+  changePassword,
+  createClinicUser,
+  getClinicUsers,
+  updateClinicUser,
+} from "../services/authService";
 
 import { formatDate } from "../lib/format";
 
@@ -33,7 +38,7 @@ const defaults = {
   clinicEmail: "clinic@caretrack.demo",
   clinicAddress: "Jaipur, Rajasthan",
   clinicTimezone: "Asia/Kolkata",
-  doctorName: "Dr. CareTrack",
+  doctorName: "Dr. Vaibhav Mathur",
   doctorPhone: "+91 98765 43210",
   doctorEmail: "doctor@caretrack.demo",
   doctorRegistration: "",
@@ -184,6 +189,18 @@ export default function Settings() {
   const [passwords, setPasswords] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [savingPassword, setSavingPassword] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [resetUser, setResetUser] = useState(null);
+  const [userSaving, setUserSaving] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    role: "staff",
+    password: "",
+  });
 
   useEffect(() => {
     try {
@@ -200,6 +217,43 @@ export default function Settings() {
       window.localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    if (
+      sessionUser?.role !== "doctor" &&
+      sessionUser?.role !== "admin"
+    ) {
+      setUsers([]);
+      return;
+    }
+
+    let active = true;
+
+    async function loadUsers() {
+      try {
+        setUsersLoading(true);
+        const result = await getClinicUsers();
+
+        if (active) {
+          setUsers(result);
+        }
+      } catch {
+        if (active) {
+          setUsers([]);
+        }
+      } finally {
+        if (active) {
+          setUsersLoading(false);
+        }
+      }
+    }
+
+    void loadUsers();
+
+    return () => {
+      active = false;
+    };
+  }, [sessionUser?.role]);
 
   function patchSettings(patch) {
     setSettings((current) => ({ ...current, ...patch }));
@@ -314,6 +368,100 @@ export default function Settings() {
       );
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function refreshUsers() {
+    const result = await getClinicUsers();
+    setUsers(result);
+  }
+
+  async function handleCreateUser(event) {
+    event.preventDefault();
+
+    if (userForm.password.length < 8) {
+      toast.error(
+        "Temporary password must be at least 8 characters",
+      );
+      return;
+    }
+
+    try {
+      setUserSaving(true);
+      await createClinicUser(userForm);
+
+      setUserForm({
+        name: "",
+        email: "",
+        role: "staff",
+        password: "",
+      });
+
+      setShowUserForm(false);
+      await refreshUsers();
+      toast.success("New clinic ID created");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          "Unable to create clinic ID",
+      );
+    } finally {
+      setUserSaving(false);
+    }
+  }
+
+  async function handleUserStatus(user) {
+    try {
+      await updateClinicUser(user.id, {
+        active: !user.active,
+      });
+
+      await refreshUsers();
+
+      toast.success(
+        user.active
+          ? "Clinic ID disabled"
+          : "Clinic ID enabled",
+      );
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          "Unable to update clinic ID",
+      );
+    }
+  }
+
+  async function handleResetUserPassword(event) {
+    event.preventDefault();
+
+    if (!resetUser) return;
+
+    if (resetPassword.length < 8) {
+      toast.error(
+        "Temporary password must be at least 8 characters",
+      );
+      return;
+    }
+
+    try {
+      setUserSaving(true);
+
+      await updateClinicUser(resetUser.id, {
+        password: resetPassword,
+      });
+
+      setResetPassword("");
+      setResetUser(null);
+      await refreshUsers();
+
+      toast.success("Temporary password set");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          "Unable to reset password",
+      );
+    } finally {
+      setUserSaving(false);
     }
   }
 
@@ -771,7 +919,117 @@ export default function Settings() {
           </div>
         </SectionCard>
 
-        <section className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+        {(sessionUser?.role === "doctor" ||
+            sessionUser?.role === "admin") && (
+          <SectionCard
+            icon={UserRound}
+            tone="bg-indigo-50 text-indigo-600"
+            title="Manage clinic IDs"
+            description="Create doctor or staff login IDs and manage password reset requests."
+            action={
+              <button
+                type="button"
+                onClick={() => setShowUserForm(true)}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                New ID
+              </button>
+            }
+          >
+            <div className="space-y-3">
+              {usersLoading ? (
+                <p className="py-4 text-sm text-slate-500">
+                  Loading clinic IDs…
+                </p>
+              ) : users.length ? (
+                users.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-slate-800">
+                          {user.name}
+                        </p>
+
+                        <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-semibold uppercase text-slate-600">
+                          {user.role}
+                        </span>
+
+                        <span
+                          className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                            user.active
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-rose-100 text-rose-700"
+                          }`}
+                        >
+                          {user.active ? "Active" : "Disabled"}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                        <Mail size={13} />
+                        {user.email}
+                      </p>
+
+                      {user.passwordResetRequestedAt && (
+                        <p className="mt-2 text-xs font-semibold text-amber-700">
+                          Password reset requested
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {user.id !== sessionUser?.id &&
+                        !(
+                          user.role === "admin" &&
+                          sessionUser?.role !== "admin"
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setResetPassword("");
+                              setResetUser(user);
+                            }}
+                            className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700"
+                          >
+                            Reset password
+                          </button>
+                        )}
+
+                      {user.id !== sessionUser?.id &&
+                        !(
+                          user.role === "admin" &&
+                          sessionUser?.role !== "admin"
+                        ) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleUserStatus(user)
+                          }
+                          className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                            user.active
+                              ? "border-rose-200 text-rose-700"
+                              : "border-emerald-200 text-emerald-700"
+                          }`}
+                        >
+                          {user.active ? "Disable" : "Enable"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="py-4 text-sm text-slate-500">
+                  No clinic IDs found.
+                </p>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
+          <section className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
           <p className="text-sm font-semibold text-amber-900">
             Privacy reminder
           </p>
@@ -827,6 +1085,163 @@ export default function Settings() {
       <div className="mt-6 flex justify-end">
         <button type="button" onClick={handleSave} className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"><Save size={18} />Save all changes</button>
       </div>
+
+      {showUserForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <form
+            onSubmit={handleCreateUser}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">
+                  Create new ID
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Create doctor or clinic staff access.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowUserForm(false)}
+                className="rounded-lg p-2 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <Field label="Name">
+                <input
+                  required
+                  value={userForm.name}
+                  onChange={(event) =>
+                    setUserForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </Field>
+
+              <Field label="Email">
+                <input
+                  required
+                  type="email"
+                  value={userForm.email}
+                  onChange={(event) =>
+                    setUserForm((current) => ({
+                      ...current,
+                      email: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </Field>
+
+              <Field label="Role">
+                <select
+                  value={userForm.role}
+                  onChange={(event) =>
+                    setUserForm((current) => ({
+                      ...current,
+                      role: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                >
+                  <option value="staff">Staff</option>
+                  <option value="doctor">Doctor</option>
+
+                  {sessionUser?.role === "admin" && (
+                    <option value="admin">Admin</option>
+                  )}
+                </select>
+              </Field>
+
+              <Field label="Temporary password">
+                <input
+                  required
+                  type="password"
+                  minLength={8}
+                  value={userForm.password}
+                  onChange={(event) =>
+                    setUserForm((current) => ({
+                      ...current,
+                      password: event.target.value,
+                    }))
+                  }
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+
+            <button
+              disabled={userSaving}
+              className="mt-6 w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {userSaving ? "Creating…" : "Create ID"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {resetUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <form
+            onSubmit={handleResetUserPassword}
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">
+                  Reset password
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {resetUser.name} · {resetUser.email}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setResetUser(null);
+                  setResetPassword("");
+                }}
+                className="rounded-lg p-2 text-slate-500"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5">
+              <Field label="Temporary password">
+                <input
+                  required
+                  type="password"
+                  minLength={8}
+                  value={resetPassword}
+                  onChange={(event) =>
+                    setResetPassword(event.target.value)
+                  }
+                  className={inputClass}
+                />
+              </Field>
+            </div>
+
+            <button
+              disabled={userSaving}
+              className="mt-6 w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {userSaving
+                ? "Resetting…"
+                : "Set temporary password"}
+            </button>
+          </form>
+        </div>
+      )}
 
       {showPasswordForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="presentation">

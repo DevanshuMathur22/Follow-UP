@@ -33,9 +33,13 @@ model User {
   role                UserRole  @default(doctor)
   active              Boolean   @default(true)
   sessionVersion      Int       @default(0)
-  failedLoginAttempts Int       @default(0)
-  lockedUntil         DateTime?
-  lastLoginAt         DateTime?
+  failedLoginAttempts      Int       @default(0)
+  lockedUntil              DateTime?
+  passwordResetRequestedAt DateTime?
+  passwordResetOtpHash     String?
+  passwordResetOtpExpiresAt DateTime?
+  passwordResetOtpAttempts Int       @default(0)
+  lastLoginAt              DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

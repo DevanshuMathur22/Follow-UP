@@ -11,6 +11,7 @@ export const permissions = {
   VIEW_ACTIVITY: "view_activity",
   VIEW_ANALYTICS: "view_analytics",
   MANAGE_SETTINGS: "manage_settings",
+  MANAGE_USERS: "manage_users",
 };
 
 const rolePermissions = {

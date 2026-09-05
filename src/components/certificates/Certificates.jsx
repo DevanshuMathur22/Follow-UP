@@ -24,7 +24,7 @@ import { formatDate, patientReference } from "../../lib/format";
 const SETTINGS_KEY = "caretrack-settings";
 
 const fallbackSettings = {
-  doctorName: "Dr. CareTrack",
+  doctorName: "Dr. Vaibhav Mathur",
   doctorRegistration: "",
   specialization: "Neurology",
   clinicName: "",
