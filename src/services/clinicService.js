@@ -538,6 +538,22 @@ export async function updateAppointment(appointmentId, updates) {
   );
 }
 
+export async function getPrescriptionSuggestions(
+  type,
+  query = "",
+) {
+  const result = unwrap(
+    await api.get("/prescription-suggestions", {
+      params: {
+        type,
+        q: query,
+      },
+    }),
+  );
+
+  return result?.suggestions || [];
+}
+
 export async function getMedicineCatalog(
   params = {},
 ) {
@@ -560,6 +576,7 @@ export async function createPrescription(input) {
     file,
     patientId,
     medicines,
+    neurologyData,
     ...fields
   } = input;
 
@@ -569,6 +586,13 @@ export async function createPrescription(input) {
     "patient",
     patientId,
   );
+
+  if (neurologyData) {
+    formData.append(
+      "neurologyData",
+      JSON.stringify(neurologyData),
+    );
+  }
 
   Object.entries(fields).forEach(
     ([key, value]) => {
@@ -1254,4 +1278,18 @@ export async function getAppointmentSlots(date, locationId) {
   );
 
   return result;
+}
+
+export async function getAppointmentBookingOptions(
+  locationIds,
+  start,
+) {
+  return unwrap(
+    await api.get("/appointments/booking-options", {
+      params: {
+        start,
+        locations: locationIds.join(","),
+      },
+    }),
+  );
 }

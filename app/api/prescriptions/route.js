@@ -32,6 +32,80 @@ function cleanText(value) {
   return text || null;
 }
 
+function normalizeSuggestion(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function splitSuggestions(value) {
+  return Array.from(
+    new Set(
+      String(value || "")
+        .split(/[\n,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function prescriptionSuggestionItems({
+  diagnosis,
+  complaints,
+  historyOfPresentIllness,
+  pastFamilyHistory,
+  examination,
+  advice,
+  testsPrescribed,
+}) {
+  const items = [];
+
+  const add = (type, value) => {
+    const clean = String(value || "").trim();
+    const normalized = normalizeSuggestion(clean);
+
+    if (!clean || !normalized) return;
+
+    items.push({
+      type,
+      value: clean,
+      normalized,
+      searchText: normalized,
+    });
+  };
+
+  add("diagnosis", diagnosis);
+
+  splitSuggestions(complaints).forEach((value) =>
+    add("complaint", value),
+  );
+
+  add("history", historyOfPresentIllness);
+  add("pastHistory", pastFamilyHistory);
+
+  splitSuggestions(examination).forEach((value) =>
+    add("examination", value),
+  );
+
+  add("advice", advice);
+
+  splitSuggestions(testsPrescribed).forEach((value) =>
+    add("test", value),
+  );
+
+  const seen = new Set();
+
+  return items.filter((item) => {
+    const key = `${item.type}|${item.normalized}`;
+
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
 function safeFileName(value) {
   const name = String(value || "prescription")
     .split(/[\\/]/)
@@ -373,6 +447,44 @@ export async function POST(request) {
       formData.get("testsPrescribed"),
     );
 
+    let neurologyData = null;
+
+    try {
+      const rawNeurologyData =
+        formData.get("neurologyData");
+
+      if (rawNeurologyData) {
+        const parsedNeurologyData = JSON.parse(
+          String(rawNeurologyData),
+        );
+
+        if (
+          !parsedNeurologyData ||
+          typeof parsedNeurologyData !== "object" ||
+          Array.isArray(parsedNeurologyData)
+        ) {
+          throw new Error("Invalid neurology data");
+        }
+
+        if (
+          JSON.stringify(parsedNeurologyData).length >
+          30000
+        ) {
+          throw new Error("Neurology data too large");
+        }
+
+        neurologyData = parsedNeurologyData;
+      }
+    } catch {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid neurology data",
+        },
+        { status: 400 },
+      );
+    }
+
     const nextVisitValue = cleanText(
       formData.get("nextVisit"),
     );
@@ -446,6 +558,7 @@ export async function POST(request) {
           duration: cleanText(item?.duration),
           composition: cleanText(item?.composition),
           instructions: cleanText(item?.instructions),
+            editNote: cleanText(item?.editNote),
         }))
         .filter((item) =>
           Object.values(item).some(Boolean),
@@ -523,6 +636,7 @@ export async function POST(request) {
         [medicine.duration, 200],
         [medicine.composition, 500],
         [medicine.instructions, 700],
+          [medicine.editNote, 700],
       ];
 
       if (
@@ -670,6 +784,7 @@ export async function POST(request) {
                 medicines,
                 advice,
                 testsPrescribed,
+                neurologyData,
                 nextVisit,
                 ...attachmentData,
                 createdById:
@@ -770,6 +885,44 @@ export async function POST(request) {
               },
             });
           }
+
+            if (recordType === "generated") {
+              const suggestionItems =
+                prescriptionSuggestionItems({
+                  diagnosis,
+                  complaints,
+                  historyOfPresentIllness,
+                  pastFamilyHistory,
+                  examination,
+                  advice,
+                  testsPrescribed,
+                });
+
+              for (const item of suggestionItems) {
+                await tx.prescriptionSuggestion.upsert({
+                  where: {
+                    type_normalized: {
+                      type: item.type,
+                      normalized: item.normalized,
+                    },
+                  },
+                  update: {
+                    value: item.value,
+                    searchText: item.searchText,
+                    active: true,
+                    usageCount: {
+                      increment: 1,
+                    },
+                    lastUsedAt: new Date(),
+                  },
+                  create: {
+                    ...item,
+                    createdById:
+                      sessionUser.id || null,
+                  },
+                });
+              }
+            }
 
           return {
             prescription:

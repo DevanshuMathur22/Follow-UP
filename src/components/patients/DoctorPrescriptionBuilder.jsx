@@ -18,6 +18,7 @@ import { toast } from "react-hot-toast";
 import {
   createPrescription,
   getMedicineCatalog,
+  getPrescriptionSuggestions,
 } from "../../services/clinicService";
 import { medicineMaster } from "../../data/medicineMaster";
 
@@ -66,7 +67,24 @@ function medicineRow(source = {}) {
     strength: source.strength || "",
     unit: source.unit || "",
     dosage: source.dosage || "",
+    editNote: source.editNote || "",
   };
+}
+
+function clinicalItems(value) {
+  const items = String(value || "")
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length ? items : [""];
+}
+
+function cleanClinicalItems(items) {
+  return items
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function localDate() {
@@ -679,6 +697,112 @@ export default function DoctorPrescriptionBuilder({
     ],
   );
 
+    const initialNeurologyData = useMemo(
+      () => ({
+        template:
+          previousPrescription?.neurologyData?.template || "",
+        migraine: {
+          headacheDays:
+            previousPrescription?.neurologyData?.migraine?.headacheDays || "",
+          attacks:
+            previousPrescription?.neurologyData?.migraine?.attacks || "",
+          duration:
+            previousPrescription?.neurologyData?.migraine?.duration || "",
+          severity:
+            previousPrescription?.neurologyData?.migraine?.severity || "",
+          aura:
+            previousPrescription?.neurologyData?.migraine?.aura || "",
+          triggers:
+            previousPrescription?.neurologyData?.migraine?.triggers || "",
+          associatedSymptoms:
+            previousPrescription?.neurologyData?.migraine?.associatedSymptoms || "",
+          score:
+            previousPrescription?.neurologyData?.migraine?.score || "",
+        },
+        parkinson: {
+          tremor:
+            previousPrescription?.neurologyData?.parkinson?.tremor || "",
+          rigidity:
+            previousPrescription?.neurologyData?.parkinson?.rigidity || "",
+          bradykinesia:
+            previousPrescription?.neurologyData?.parkinson?.bradykinesia || "",
+          gait:
+            previousPrescription?.neurologyData?.parkinson?.gait || "",
+          freezing:
+            previousPrescription?.neurologyData?.parkinson?.freezing || "",
+          falls:
+            previousPrescription?.neurologyData?.parkinson?.falls || "",
+          dyskinesia:
+            previousPrescription?.neurologyData?.parkinson?.dyskinesia || "",
+          wearingOff:
+            previousPrescription?.neurologyData?.parkinson?.wearingOff || "",
+          onOff:
+            previousPrescription?.neurologyData?.parkinson?.onOff || "",
+          nonMotor:
+            previousPrescription?.neurologyData?.parkinson?.nonMotor || "",
+        },
+        dbs: {
+          target:
+            previousPrescription?.neurologyData?.dbs?.target || "",
+          side:
+            previousPrescription?.neurologyData?.dbs?.side || "",
+          device:
+            previousPrescription?.neurologyData?.dbs?.device || "",
+          battery:
+            previousPrescription?.neurologyData?.dbs?.battery || "",
+          amplitude:
+            previousPrescription?.neurologyData?.dbs?.amplitude || "",
+          pulseWidth:
+            previousPrescription?.neurologyData?.dbs?.pulseWidth || "",
+          frequency:
+            previousPrescription?.neurologyData?.dbs?.frequency || "",
+          contacts:
+            previousPrescription?.neurologyData?.dbs?.contacts || "",
+          notes:
+            previousPrescription?.neurologyData?.dbs?.notes || "",
+        },
+        botox: {
+          indication:
+            previousPrescription?.neurologyData?.botox?.indication || "",
+          brand:
+            previousPrescription?.neurologyData?.botox?.brand || "",
+          lot:
+            previousPrescription?.neurologyData?.botox?.lot || "",
+          expiry:
+            previousPrescription?.neurologyData?.botox?.expiry || "",
+          dilution:
+            previousPrescription?.neurologyData?.botox?.dilution || "",
+          totalUnits:
+            previousPrescription?.neurologyData?.botox?.totalUnits || "",
+          usedUnits:
+            previousPrescription?.neurologyData?.botox?.usedUnits || "",
+          wastedUnits:
+            previousPrescription?.neurologyData?.botox?.wastedUnits || "",
+          sites:
+            previousPrescription?.neurologyData?.botox?.sites || "",
+          nextDue:
+            previousPrescription?.neurologyData?.botox?.nextDue || "",
+        },
+        epilepsy: {
+          seizureType:
+            previousPrescription?.neurologyData?.epilepsy?.seizureType || "",
+          lastSeizure:
+            previousPrescription?.neurologyData?.epilepsy?.lastSeizure || "",
+          frequency:
+            previousPrescription?.neurologyData?.epilepsy?.frequency || "",
+          duration:
+            previousPrescription?.neurologyData?.epilepsy?.duration || "",
+          triggers:
+            previousPrescription?.neurologyData?.epilepsy?.triggers || "",
+          adherence:
+            previousPrescription?.neurologyData?.epilepsy?.adherence || "",
+          sideEffects:
+            previousPrescription?.neurologyData?.epilepsy?.sideEffects || "",
+        },
+      }),
+      [previousPrescription],
+    );
+
   const previousMedicines =
     useMemo(() => {
       if (
@@ -694,6 +818,24 @@ export default function DoctorPrescriptionBuilder({
 
   const [form, setForm] =
     useState(initial);
+
+    const [neurologyData, setNeurologyData] =
+      useState(initialNeurologyData);
+
+    const [complaintItems, setComplaintItems] =
+      useState(() =>
+        clinicalItems(initial.complaints),
+      );
+
+    const [examinationItems, setExaminationItems] =
+      useState(() =>
+        clinicalItems(initial.examination),
+      );
+
+    const [testItems, setTestItems] =
+      useState(() =>
+        clinicalItems(initial.testsPrescribed),
+      );
 
   const [medicines, setMedicines] =
     useState(() =>
@@ -712,10 +854,100 @@ export default function DoctorPrescriptionBuilder({
     setActiveMedicineIndex,
   ] = useState(null);
 
+    const [
+      activeTestIndex,
+      setActiveTestIndex,
+    ] = useState(null);
+
+    const [activeDiagnosis, setActiveDiagnosis] =
+      useState(false);
+
+    const [
+      activeComplaintIndex,
+      setActiveComplaintIndex,
+    ] = useState(null);
+
+    const [
+      activeExaminationIndex,
+      setActiveExaminationIndex,
+    ] = useState(null);
+
   const [
     catalogMedicines,
     setCatalogMedicines,
   ] = useState([]);
+
+    const [
+      clinicalSuggestions,
+      setClinicalSuggestions,
+    ] = useState({
+      diagnosis: [],
+      complaint: [],
+      history: [],
+      pastHistory: [],
+      examination: [],
+      advice: [],
+      test: [],
+    });
+
+    const suggestionTimersRef = useRef({});
+
+    function loadClinicalSuggestions(type, query = "") {
+      clearTimeout(
+        suggestionTimersRef.current[type],
+      );
+
+      suggestionTimersRef.current[type] =
+        setTimeout(() => {
+          void getPrescriptionSuggestions(
+            type,
+            query,
+          )
+            .then((items) => {
+              setClinicalSuggestions((current) => ({
+                ...current,
+                [type]: items,
+              }));
+            })
+            .catch(() => {});
+        }, 120);
+    }
+
+    function updateListItem(setter, field, index, value) {
+      setter((current) => {
+        const next = current.map((item, itemIndex) =>
+          itemIndex === index ? value : item,
+        );
+
+        setForm((currentForm) => ({
+          ...currentForm,
+          [field]: cleanClinicalItems(next),
+        }));
+
+        return next;
+      });
+    }
+
+    function addListItem(setter) {
+      setter((current) => [...current, ""]);
+    }
+
+    function removeListItem(setter, field, index) {
+      setter((current) => {
+        const next = current.filter(
+          (_, itemIndex) => itemIndex !== index,
+        );
+
+        const safeNext = next.length ? next : [""];
+
+        setForm((currentForm) => ({
+          ...currentForm,
+          [field]: cleanClinicalItems(safeNext),
+        }));
+
+        return safeNext;
+      });
+    }
 
   useEffect(() => {
     let active = true;
@@ -796,6 +1028,7 @@ export default function DoctorPrescriptionBuilder({
     draftKey,
     form,
     medicines,
+      neurologyData,
   ]);
 
   function updateField(key, value) {
@@ -804,6 +1037,29 @@ export default function DoctorPrescriptionBuilder({
       [key]: value,
     }));
   }
+
+    function updateNeurologySection(
+      section,
+      key,
+      value,
+    ) {
+      setNeurologyData((current) => ({
+        ...current,
+        [section]: {
+          ...current[section],
+          [key]: value,
+        },
+      }));
+    }
+
+    function selectNeurologyTemplate(
+      template,
+    ) {
+      setNeurologyData((current) => ({
+        ...current,
+        template,
+      }));
+    }
 
   function updateMedicine(
     index,
@@ -952,6 +1208,9 @@ export default function DoctorPrescriptionBuilder({
         dosage: String(
           item.dosage || "",
         ).trim(),
+          editNote: String(
+            item.editNote || "",
+          ).trim(),
       }))
       .filter((item) =>
         Object.values(item).some(Boolean),
@@ -966,6 +1225,7 @@ export default function DoctorPrescriptionBuilder({
           new Date().toISOString(),
         ...form,
         medicines: cleanMedicines(),
+          neurologyData,
       },
       patient,
       false,
@@ -1017,6 +1277,7 @@ export default function DoctorPrescriptionBuilder({
           examination:
             form.examination.trim(),
           medicines: clean,
+            neurologyData,
           advice:
             form.advice.trim(),
           testsPrescribed:
@@ -1115,97 +1376,641 @@ export default function DoctorPrescriptionBuilder({
             Clinical Summary
           </h3>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-xs font-semibold text-slate-600 md:col-span-2">
-              Diagnosis
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="relative md:col-span-2">
+                <p className="text-xs font-semibold text-slate-600">
+                  Diagnosis
+                </p>
 
-              <input
-                autoFocus
-                value={form.diagnosis}
-                onChange={(event) =>
-                  updateField(
-                    "diagnosis",
-                    event.target.value,
-                  )
-                }
-                placeholder="Diagnosis"
-                className="mt-1.5 w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-              />
-            </label>
+                <input
+                  autoFocus
+                  autoComplete="off"
+                  value={form.diagnosis}
+                  onFocus={() => {
+                    setActiveDiagnosis(true);
+                    loadClinicalSuggestions(
+                      "diagnosis",
+                      form.diagnosis,
+                    );
+                  }}
+                  onBlur={() =>
+                    setTimeout(
+                      () => setActiveDiagnosis(false),
+                      150,
+                    )
+                  }
+                  onChange={(event) => {
+                    updateField(
+                      "diagnosis",
+                      event.target.value,
+                    );
+                    setActiveDiagnosis(true);
+                    loadClinicalSuggestions(
+                      "diagnosis",
+                      event.target.value,
+                    );
+                  }}
+                  placeholder="Diagnosis"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+                />
 
-            <label className="text-xs font-semibold text-slate-600 md:col-span-2">
-              Complaints
+                {activeDiagnosis &&
+                  clinicalSuggestions.diagnosis.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                      {clinicalSuggestions.diagnosis.map(
+                        (item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onMouseDown={(event) =>
+                              event.preventDefault()
+                            }
+                            onClick={() => {
+                              updateField(
+                                "diagnosis",
+                                item.value,
+                              );
+                              setActiveDiagnosis(false);
+                            }}
+                            className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-2.5 text-left last:border-0 hover:bg-indigo-50"
+                          >
+                            <span className="text-sm font-semibold text-slate-700">
+                              {item.value}
+                            </span>
+                            <span className="text-[10px] font-semibold text-indigo-600">
+                              Saved
+                            </span>
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  )}
+              </div>
 
-              <textarea
-                rows="2"
-                value={form.complaints}
-                onChange={(event) =>
-                  updateField(
-                    "complaints",
-                    event.target.value,
-                  )
-                }
-                placeholder="Patient complaints"
-                className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-              />
-            </label>
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-600">
+                    Complaints
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      addListItem(setComplaintItems)
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    <Plus size={13} />
+                    Add Complaint
+                  </button>
+                </div>
 
-            <label className="text-xs font-semibold text-slate-600 md:col-span-2">
-              History of Present Illness
+                <div className="mt-1.5 space-y-2">
+                  {complaintItems.map(
+                    (complaint, index) => (
+                      <div
+                        key={index}
+                        className="flex gap-2"
+                      >
+                        <div className="relative min-w-0 flex-1">
+                          <input
+                            value={complaint}
+                            autoComplete="off"
+                            onFocus={() => {
+                              setActiveComplaintIndex(
+                                index,
+                              );
+                              loadClinicalSuggestions(
+                                "complaint",
+                                complaint,
+                              );
+                            }}
+                            onBlur={() =>
+                              setTimeout(
+                                () =>
+                                  setActiveComplaintIndex(
+                                    null,
+                                  ),
+                                150,
+                              )
+                            }
+                            onChange={(event) => {
+                              updateListItem(
+                                setComplaintItems,
+                                "complaints",
+                                index,
+                                event.target.value,
+                              );
+                              setActiveComplaintIndex(
+                                index,
+                              );
+                              loadClinicalSuggestions(
+                                "complaint",
+                                event.target.value,
+                              );
+                            }}
+                            placeholder="Type complaint"
+                            className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+                          />
 
-              <textarea
-                rows="3"
-                value={
-                  form.historyOfPresentIllness
-                }
-                onChange={(event) =>
-                  updateField(
-                    "historyOfPresentIllness",
-                    event.target.value,
-                  )
-                }
-                placeholder="Current history / follow-up summary"
-                className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-              />
-            </label>
+                          {activeComplaintIndex === index &&
+                            clinicalSuggestions.complaint.length > 0 && (
+                              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                                {clinicalSuggestions.complaint.map(
+                                  (item) => (
+                                    <button
+                                      key={item.id}
+                                      type="button"
+                                      onMouseDown={(event) =>
+                                        event.preventDefault()
+                                      }
+                                      onClick={() => {
+                                        updateListItem(
+                                          setComplaintItems,
+                                          "complaints",
+                                          index,
+                                          item.value,
+                                        );
+                                        setActiveComplaintIndex(
+                                          null,
+                                        );
+                                      }}
+                                      className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-2.5 text-left last:border-0 hover:bg-indigo-50"
+                                    >
+                                      <span className="text-sm font-semibold text-slate-700">
+                                        {item.value}
+                                      </span>
+                                      <span className="text-[10px] font-semibold text-indigo-600">
+                                        Saved
+                                      </span>
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                        </div>
 
-            <label className="text-xs font-semibold text-slate-600">
-              Past / Family History
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeListItem(
+                              setComplaintItems,
+                              "complaints",
+                              index,
+                            )
+                          }
+                          className="rounded-lg border border-slate-200 px-2.5 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ),
+                  )}
+                </div>
 
-              <textarea
-                rows="2"
-                value={
-                  form.pastFamilyHistory
-                }
-                onChange={(event) =>
-                  updateField(
-                    "pastFamilyHistory",
-                    event.target.value,
-                  )
-                }
-                placeholder="Optional"
-                className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-              />
-            </label>
+              </div>
 
-            <label className="text-xs font-semibold text-slate-600">
-              Examination
+              <label className="text-xs font-semibold text-slate-600 md:col-span-2">
+                History of Present Illness
+                <select
+                  value=""
+                  onFocus={() =>
+                    loadClinicalSuggestions("history")
+                  }
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      updateField(
+                        "historyOfPresentIllness",
+                        event.target.value,
+                      );
+                    }
+                  }}
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-600"
+                >
+                  <option value="">
+                    Select saved history
+                  </option>
+                  {clinicalSuggestions.history.map(
+                    (item) => (
+                      <option
+                        key={item.id}
+                        value={item.value}
+                      >
+                        {item.value}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <textarea
+                  rows="3"
+                  value={form.historyOfPresentIllness}
+                  onChange={(event) =>
+                    updateField(
+                      "historyOfPresentIllness",
+                      event.target.value,
+                    )
+                  }
+                  placeholder="Current history / follow-up summary"
+                  className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+                />
+              </label>
 
-              <textarea
-                rows="2"
-                value={form.examination}
-                onChange={(event) =>
-                  updateField(
-                    "examination",
-                    event.target.value,
-                  )
-                }
-                placeholder="Examination findings"
-                className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-              />
-            </label>
-          </div>
-        </section>
+              <label className="text-xs font-semibold text-slate-600">
+                Past / Family History
+                <select
+                  value=""
+                  onFocus={() =>
+                    loadClinicalSuggestions(
+                      "pastHistory",
+                    )
+                  }
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      updateField(
+                        "pastFamilyHistory",
+                        event.target.value,
+                      );
+                    }
+                  }}
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-600"
+                >
+                  <option value="">
+                    Select saved history
+                  </option>
+                  {clinicalSuggestions.pastHistory.map(
+                    (item) => (
+                      <option
+                        key={item.id}
+                        value={item.value}
+                      >
+                        {item.value}
+                      </option>
+                    ),
+                  )}
+                </select>
+                <textarea
+                  rows="2"
+                  value={form.pastFamilyHistory}
+                  onChange={(event) =>
+                    updateField(
+                      "pastFamilyHistory",
+                      event.target.value,
+                    )
+                  }
+                  placeholder="Optional"
+                  className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+                />
+              </label>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-600">
+                    Examination
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      addListItem(
+                        setExaminationItems,
+                      )
+                    }
+                    className="text-xs font-semibold text-indigo-600"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                <div className="mt-1.5 space-y-2">
+                  {examinationItems.map(
+                    (finding, index) => (
+                      <div
+                        key={index}
+                        className="flex gap-2"
+                      >
+                        <div className="relative min-w-0 flex-1">
+                          <input
+                            value={finding}
+                            autoComplete="off"
+                            onFocus={() => {
+                              setActiveExaminationIndex(
+                                index,
+                              );
+                              loadClinicalSuggestions(
+                                "examination",
+                                finding,
+                              );
+                            }}
+                            onBlur={() =>
+                              setTimeout(
+                                () =>
+                                  setActiveExaminationIndex(
+                                    null,
+                                  ),
+                                150,
+                              )
+                            }
+                            onChange={(event) => {
+                              updateListItem(
+                                setExaminationItems,
+                                "examination",
+                                index,
+                                event.target.value,
+                              );
+                              setActiveExaminationIndex(
+                                index,
+                              );
+                              loadClinicalSuggestions(
+                                "examination",
+                                event.target.value,
+                              );
+                            }}
+                            placeholder="Examination finding"
+                            className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+                          />
+
+                          {activeExaminationIndex === index &&
+                            clinicalSuggestions.examination.length > 0 && (
+                              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                                {clinicalSuggestions.examination.map(
+                                  (item) => (
+                                    <button
+                                      key={item.id}
+                                      type="button"
+                                      onMouseDown={(event) =>
+                                        event.preventDefault()
+                                      }
+                                      onClick={() => {
+                                        updateListItem(
+                                          setExaminationItems,
+                                          "examination",
+                                          index,
+                                          item.value,
+                                        );
+                                        setActiveExaminationIndex(
+                                          null,
+                                        );
+                                      }}
+                                      className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-2.5 text-left last:border-0 hover:bg-indigo-50"
+                                    >
+                                      <span className="text-sm font-semibold text-slate-700">
+                                        {item.value}
+                                      </span>
+                                      <span className="text-[10px] font-semibold text-indigo-600">
+                                        Saved
+                                      </span>
+                                    </button>
+                                  ),
+                                )}
+                              </div>
+                            )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeListItem(
+                              setExaminationItems,
+                              "examination",
+                              index,
+                            )
+                          }
+                          className="rounded-lg border border-slate-200 px-2 text-slate-400 hover:text-rose-600"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ),
+                  )}
+                </div>
+
+              </div>
+            </div>
+          </section>
+          <section className="border-t border-slate-100 pt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Neurology Details
+                </h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Select the relevant consultation type.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ["migraine", "Migraine"],
+                  ["parkinson", "Parkinson"],
+                  ["dbs", "DBS"],
+                  ["botox", "Botox"],
+                  ["epilepsy", "Epilepsy"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      selectNeurologyTemplate(value)
+                    }
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                      neurologyData.template === value
+                        ? "border-indigo-600 bg-indigo-600 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-indigo-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {neurologyData.template && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                {neurologyData.template === "migraine" && (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {[
+                      ["headacheDays", "Headache days/month"],
+                      ["attacks", "Attacks/month"],
+                      ["duration", "Duration"],
+                      ["severity", "Severity"],
+                      ["aura", "Aura"],
+                      ["triggers", "Triggers"],
+                      ["associatedSymptoms", "Associated symptoms"],
+                      ["score", "MIDAS / HIT-6"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-xs font-semibold text-slate-600">
+                        {label}
+                        <input
+                          value={neurologyData.migraine[key]}
+                          onChange={(e) =>
+                            updateNeurologySection(
+                              "migraine",
+                              key,
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {neurologyData.template === "parkinson" && (
+                  <div className="grid gap-3 md:grid-cols-5">
+                    {[
+                      ["tremor", "Tremor"],
+                      ["rigidity", "Rigidity"],
+                      ["bradykinesia", "Bradykinesia"],
+                      ["gait", "Gait"],
+                      ["freezing", "Freezing"],
+                      ["falls", "Falls"],
+                      ["dyskinesia", "Dyskinesia"],
+                      ["wearingOff", "Wearing-off"],
+                      ["onOff", "ON / OFF"],
+                      ["nonMotor", "Non-motor"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-xs font-semibold text-slate-600">
+                        {label}
+                        <input
+                          value={neurologyData.parkinson[key]}
+                          onChange={(e) =>
+                            updateNeurologySection(
+                              "parkinson",
+                              key,
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {neurologyData.template === "dbs" && (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {[
+                      ["target", "Target"],
+                      ["side", "Side"],
+                      ["device", "Device"],
+                      ["battery", "Battery"],
+                      ["amplitude", "Amplitude"],
+                      ["pulseWidth", "Pulse width"],
+                      ["frequency", "Frequency"],
+                      ["contacts", "Contacts"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-xs font-semibold text-slate-600">
+                        {label}
+                        <input
+                          value={neurologyData.dbs[key]}
+                          onChange={(e) =>
+                            updateNeurologySection(
+                              "dbs",
+                              key,
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                        />
+                      </label>
+                    ))}
+
+                    <label className="text-xs font-semibold text-slate-600 md:col-span-4">
+                      Programming / response notes
+                      <textarea
+                        rows="2"
+                        value={neurologyData.dbs.notes}
+                        onChange={(e) =>
+                          updateNeurologySection(
+                            "dbs",
+                            "notes",
+                            e.target.value,
+                          )
+                        }
+                        className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {neurologyData.template === "botox" && (
+                  <div className="grid gap-3 md:grid-cols-5">
+                    {[
+                      ["indication", "Indication"],
+                      ["brand", "Brand"],
+                      ["lot", "Batch / lot"],
+                      ["expiry", "Expiry"],
+                      ["dilution", "Dilution"],
+                      ["totalUnits", "Total units"],
+                      ["usedUnits", "Used units"],
+                      ["wastedUnits", "Wasted units"],
+                      ["nextDue", "Next due"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-xs font-semibold text-slate-600">
+                        {label}
+                        <input
+                          value={neurologyData.botox[key]}
+                          onChange={(e) =>
+                            updateNeurologySection(
+                              "botox",
+                              key,
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                        />
+                      </label>
+                    ))}
+
+                    <label className="text-xs font-semibold text-slate-600 md:col-span-5">
+                      Injection sites / muscles / units
+                      <textarea
+                        rows="3"
+                        value={neurologyData.botox.sites}
+                        onChange={(e) =>
+                          updateNeurologySection(
+                            "botox",
+                            "sites",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="Muscle / side / units"
+                        className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {neurologyData.template === "epilepsy" && (
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {[
+                      ["seizureType", "Seizure type"],
+                      ["lastSeizure", "Last seizure"],
+                      ["frequency", "Frequency"],
+                      ["duration", "Duration"],
+                      ["triggers", "Triggers"],
+                      ["adherence", "Adherence"],
+                      ["sideEffects", "Side effects"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="text-xs font-semibold text-slate-600">
+                        {label}
+                        <input
+                          value={neurologyData.epilepsy[key]}
+                          onChange={(e) =>
+                            updateNeurologySection(
+                              "epilepsy",
+                              key,
+                              e.target.value,
+                            )
+                          }
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
 
         <section className="border-t border-slate-100 pt-5">
           <div className="flex items-center justify-between gap-4">
@@ -1416,6 +2221,88 @@ export default function DoctorPrescriptionBuilder({
                       </label>
                     </div>
 
+                      <label className="mt-3 block text-xs font-semibold text-slate-600">
+                        Edit note / reason
+                        <input
+                          value={medicine.editNote}
+                          onChange={(event) =>
+                            updateMedicine(
+                              index,
+                              "editNote",
+                              event.target.value,
+                            )
+                          }
+                          placeholder="Optional reason for medicine / strength change"
+                          className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                        />
+                      </label>
+
+                      <div className="mt-3 grid gap-3 md:grid-cols-4">
+                        <label className="text-xs font-semibold text-slate-600">
+                          Timing / relation to food
+                          <input
+                            value={medicine.timing}
+                            onChange={(event) =>
+                              updateMedicine(
+                                index,
+                                "timing",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="After food / bedtime"
+                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                          />
+                        </label>
+
+                        <label className="text-xs font-semibold text-slate-600">
+                          Frequency
+                          <input
+                            value={medicine.frequency}
+                            onChange={(event) =>
+                              updateMedicine(
+                                index,
+                                "frequency",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="OD / BD / TDS / PRN"
+                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                          />
+                        </label>
+
+                        <label className="text-xs font-semibold text-slate-600">
+                          Duration
+                          <input
+                            value={medicine.duration}
+                            onChange={(event) =>
+                              updateMedicine(
+                                index,
+                                "duration",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="2 weeks / continue"
+                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                          />
+                        </label>
+
+                        <label className="text-xs font-semibold text-slate-600">
+                          Instructions
+                          <input
+                            value={medicine.instructions}
+                            onChange={(event) =>
+                              updateMedicine(
+                                index,
+                                "instructions",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="Taper / titrate / continue"
+                            className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-indigo-400"
+                          />
+                        </label>
+                      </div>
+
                     <div className="mt-4">
                       <p className="text-xs font-semibold text-slate-600">
                         Dose
@@ -1485,42 +2372,171 @@ export default function DoctorPrescriptionBuilder({
           </datalist>
         </section>
 
-        <section className="grid gap-3 border-t border-slate-100 pt-5 md:grid-cols-2">
-          <label className="text-xs font-semibold text-slate-600">
-            Advice
+          <section className="grid gap-4 border-t border-slate-100 pt-5 md:grid-cols-2">
+            <label className="text-xs font-semibold text-slate-600">
+              Advice
+              <select
+                value=""
+                onFocus={() =>
+                  loadClinicalSuggestions("advice")
+                }
+                onChange={(event) => {
+                  if (event.target.value) {
+                    updateField(
+                      "advice",
+                      event.target.value,
+                    );
+                  }
+                }}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-600"
+              >
+                <option value="">
+                  Select saved advice
+                </option>
+                {clinicalSuggestions.advice.map(
+                  (item) => (
+                    <option
+                      key={item.id}
+                      value={item.value}
+                    >
+                      {item.value}
+                    </option>
+                  ),
+                )}
+              </select>
 
-            <textarea
-              rows="2"
-              value={form.advice}
-              onChange={(event) =>
-                updateField(
-                  "advice",
-                  event.target.value,
-                )
-              }
-              placeholder="Advice"
-              className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
+              <textarea
+                rows="2"
+                value={form.advice}
+                onChange={(event) =>
+                  updateField(
+                    "advice",
+                    event.target.value,
+                  )
+                }
+                placeholder="Advice"
+                className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+              />
+            </label>
 
-          <label className="text-xs font-semibold text-slate-600">
-            Tests Prescribed
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-600">
+                  Tests Prescribed
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    addListItem(setTestItems)
+                  }
+                  className="text-xs font-semibold text-indigo-600"
+                >
+                  + Add Test
+                </button>
+              </div>
 
-            <textarea
-              rows="2"
-              value={
-                form.testsPrescribed
-              }
-              onChange={(event) =>
-                updateField(
-                  "testsPrescribed",
-                  event.target.value,
-                )
-              }
-              placeholder="CBC, RFT, TSH..."
-              className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
-            />
-          </label>
+              <div className="mt-1.5 space-y-2">
+                {testItems.map((test, index) => (
+                  <div
+                    key={index}
+                    className="flex gap-2"
+                  >
+                    <div className="relative min-w-0 flex-1">
+                      <input
+                        value={test}
+                        autoComplete="off"
+                        onFocus={() => {
+                          setActiveTestIndex(index);
+                          loadClinicalSuggestions(
+                            "test",
+                            test,
+                          );
+                        }}
+                        onBlur={() =>
+                          setTimeout(
+                            () =>
+                              setActiveTestIndex(
+                                null,
+                              ),
+                            150,
+                          )
+                        }
+                        onChange={(event) => {
+                          updateListItem(
+                            setTestItems,
+                            "testsPrescribed",
+                            index,
+                            event.target.value,
+                          );
+
+                          setActiveTestIndex(index);
+
+                          loadClinicalSuggestions(
+                            "test",
+                            event.target.value,
+                          );
+                        }}
+                        placeholder="CBC, RFT, MRI Brain..."
+                        className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-indigo-400"
+                      />
+
+                      {activeTestIndex === index &&
+                        clinicalSuggestions.test.length > 0 && (
+                          <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                            {clinicalSuggestions.test.map(
+                              (item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onMouseDown={(event) =>
+                                    event.preventDefault()
+                                  }
+                                  onClick={() => {
+                                    updateListItem(
+                                      setTestItems,
+                                      "testsPrescribed",
+                                      index,
+                                      item.value,
+                                    );
+
+                                    setActiveTestIndex(
+                                      null,
+                                    );
+                                  }}
+                                  className="flex w-full items-center justify-between border-b border-slate-100 px-4 py-2.5 text-left last:border-0 hover:bg-indigo-50"
+                                >
+                                  <span className="text-sm font-semibold text-slate-700">
+                                    {item.value}
+                                  </span>
+
+                                  <span className="text-[10px] font-semibold text-indigo-600">
+                                    Saved
+                                  </span>
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeListItem(
+                          setTestItems,
+                          "testsPrescribed",
+                          index,
+                        )
+                      }
+                      className="rounded-lg border border-slate-200 px-2 text-slate-400 hover:text-rose-600"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+            </div>
 
           <div className="md:col-span-2">
             <div className="flex flex-col gap-3">
