@@ -11,7 +11,6 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import CityStateAutocomplete from "../common/CityStateAutocomplete";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -363,14 +362,6 @@ export default function Appointments() {
     [dateAvailableLocations],
   );
 
-  const formLocations = useMemo(
-    () =>
-      dateAvailableLocations.filter(
-        (item) => !form.city || item.city === form.city,
-      ),
-    [dateAvailableLocations, form.city],
-  );
-
   const filteredAppointments = useMemo(() => {
     return appointments.filter((item) => {
       const location = item.location || {};
@@ -574,8 +565,6 @@ export default function Appointments() {
     if (!locationStillValid || !cityStillValid) {
       setForm((current) => ({
         ...current,
-        city: "",
-        locationId: "",
         startTime: "",
       }));
 
@@ -593,10 +582,6 @@ export default function Appointments() {
 
   const selectedPatient = patients.find(
     (patient) => patient.id === form.patientId,
-  );
-
-  const selectedFormLocation = locations.find(
-    (location) => location.id === form.locationId,
   );
 
   const activeQueue = activeAppointments;
@@ -1154,57 +1139,246 @@ export default function Appointments() {
             onSubmit={bookAppointment}
             className="mt-6 space-y-5"
           >
-            <div className="grid gap-4 xl:grid-cols-3">
-              <div className="relative">
-                <label className="text-sm font-medium text-slate-700">
-                  Patient
-                </label>
+              <div className="space-y-7">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white">
+                      1
+                    </span>
 
-                {form.patientId && selectedPatient ? (
-                  <div className="mt-2 flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 p-3">
                     <div>
-                      <p className="text-sm font-semibold">
-                        {selectedPatient.fullName}
+                      <p className="font-semibold text-slate-800">
+                        Select Clinic
                       </p>
                       <p className="text-xs text-slate-500">
-                        {selectedPatient.mobile}
+                        Choose the clinic for this appointment.
                       </p>
                     </div>
-
-                    <button type="button" onClick={clearPatient}>
-                      <X size={16} />
-                    </button>
                   </div>
-                ) : (
-                  <>
-                    <div className="relative mt-2">
-                      <Search
-                        size={16}
-                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-                      />
 
-                      <input
-                        value={patientQuery}
-                        onChange={(event) =>
-                          setPatientQuery(event.target.value)
-                        }
-                        placeholder="Search patient..."
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm"
-                      />
-                    </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    {["Jaipur", "Kota", "Jodhpur", "Sikar", "Ajmer"].map(
+                      (clinicCity) => {
+                        const location = locations.find(
+                          (item) =>
+                            item.active !== false &&
+                            String(item.city || "").toLowerCase() ===
+                              clinicCity.toLowerCase(),
+                        );
 
-                    {patientResults.length > 0 && (
-                      <div className="absolute z-40 mt-1 w-full rounded-xl border bg-white p-1 shadow-xl">
-                        {patientResults.map((patient) => (
+                        const selected =
+                          location?.id === form.locationId;
+
+                        return (
                           <button
-                            key={patient.id}
+                            key={clinicCity}
                             type="button"
-                            onClick={() => selectPatient(patient)}
-                            className="block w-full rounded-lg px-3 py-3 text-left hover:bg-slate-50"
+                            disabled={!location}
+                            onClick={() => {
+                              if (!location) return;
+
+                              setForm((current) => ({
+                                ...current,
+                                city: clinicCity,
+                                locationId: location.id,
+                                startTime: "",
+                              }));
+
+                              setNewPatient((current) => ({
+                                ...current,
+                                city: current.city || clinicCity,
+                                state: current.state || "Rajasthan",
+                              }));
+                            }}
+                            className={`rounded-xl border px-4 py-4 text-left transition ${
+                              selected
+                                ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                                : location
+                                  ? "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50"
+                                  : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                            }`}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-800">
+                            <p className="text-sm font-semibold">
+                              {clinicCity}
+                            </p>
+
+                            <p
+                              className={`mt-1 text-xs ${
+                                selected
+                                  ? "text-indigo-100"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              {location
+                                ? location.name || `${clinicCity} Clinic`
+                                : "Not configured"}
+                            </p>
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white">
+                      2
+                    </span>
+
+                    <div>
+                      <p className="font-semibold text-slate-800">
+                        Select Date & Time
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Choose an available appointment slot.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 max-w-sm">
+                    <label className="text-sm font-medium text-slate-700">
+                      Appointment Date
+                      <input
+                        type="date"
+                        min={localDateKey()}
+                        value={form.dateKey}
+                        disabled={!form.locationId}
+                        onChange={(event) =>
+                          updateForm("dateKey", event.target.value)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 outline-none focus:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="text-sm font-medium text-slate-700">
+                      Available Slots
+                    </p>
+
+                    {!form.locationId ? (
+                      <p className="mt-3 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-400">
+                        Select clinic first.
+                      </p>
+                    ) : slotsLoading ? (
+                      <p className="mt-3 text-sm text-slate-500">
+                        Loading slots...
+                      </p>
+                    ) : slotsMode === "unavailable" ? (
+                      <div className="mt-3 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
+                        Dr. Vaibhav Mathur is unavailable at this clinic on this date.
+                        {slotsNote ? ` ${slotsNote}` : ""}
+                      </div>
+                    ) : slots.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {slots.map((slot) => (
+                          <button
+                            key={slot.slotKey}
+                            type="button"
+                            disabled={!slot.available}
+                            onClick={() =>
+                              updateForm("startTime", slot.startTime)
+                            }
+                            className={`min-w-[96px] rounded-xl border px-4 py-2.5 text-sm font-semibold transition ${
+                              !slot.available
+                                ? "cursor-not-allowed bg-slate-100 text-slate-300"
+                                : form.startTime === slot.startTime
+                                  ? "border-indigo-600 bg-indigo-600 text-white"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
+                            }`}
+                          >
+                            {timeLabel(slot.startTime)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
+                        <p className="text-sm font-semibold text-amber-800">
+                          No available slots on {dateLabel(form.dateKey)}.
+                        </p>
+                        <p className="mt-1 text-xs text-amber-700">
+                          Choose another date.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-8 items-center justify-center rounded-full bg-indigo-600 text-sm font-semibold text-white">
+                      3
+                    </span>
+
+                    <div>
+                      <p className="font-semibold text-slate-800">
+                        Patient Details
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Search an existing patient or add a new patient.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative mt-4 max-w-xl">
+                    {form.patientId && selectedPatient ? (
+                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-800">
+                              {selectedPatient.fullName}
+                            </p>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                              {selectedPatient.mobile || "No mobile"}
+                            </p>
+
+                            <p className="mt-2 text-xs text-slate-500">
+                              District:{" "}
+                              <span className="font-semibold text-slate-700">
+                                {selectedPatient.city || "Not provided"}
+                              </span>
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={clearPatient}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-white"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <Search
+                            size={16}
+                            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                          />
+
+                          <input
+                            value={patientQuery}
+                            onChange={(event) =>
+                              setPatientQuery(event.target.value)
+                            }
+                            placeholder="Search by patient name, mobile or patient ID..."
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-400"
+                          />
+                        </div>
+
+                        {patientResults.length > 0 && (
+                          <div className="absolute z-40 mt-1 w-full rounded-xl border bg-white p-1 shadow-xl">
+                            {patientResults.map((patient) => (
+                              <button
+                                key={patient.id}
+                                type="button"
+                                onClick={() => selectPatient(patient)}
+                                className="block w-full rounded-lg px-3 py-3 text-left hover:bg-slate-50"
+                              >
+                                <p className="text-sm font-semibold text-slate-800">
                                   {patient.fullName}
                                 </p>
 
@@ -1213,167 +1387,75 @@ export default function Appointments() {
                                   {patient.patientCode
                                     ? ` · ${patient.patientCode}`
                                     : ""}
+                                  {patient.city
+                                    ? ` · ${patient.city}`
+                                    : ""}
                                 </p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
 
-                                <p className="mt-1 text-xs text-slate-400">
-                                  {[
-                                    patient.category,
-                                    patient.city,
-                                    patient.age
-                                      ? `${patient.age} yrs`
-                                      : "",
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                </p>
-                              </div>
+                        <button
+                          type="button"
+                          disabled={!form.locationId}
+                          onClick={() => {
+                            setShowNewPatient(true);
 
-                              <span className="shrink-0 rounded-lg bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-600">
-                                Select
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                            setNewPatient((current) => ({
+                              ...current,
+                              city: current.city || form.city || "",
+                              state: current.state || "Rajasthan",
+                            }));
+                          }}
+                          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                        >
+                          <Plus size={14} />
+                          Add New Patient
+                        </button>
+                      </>
                     )}
+                  </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNewPatient(true);
-                        setNewPatient((current) => ({
-                          ...current,
-                          city: current.city || form.city || "",
-                        }));
-                      }}
-                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                    >
-                      <Plus size={14} />
-                      Add New Patient
-                    </button>
-                  </>
-                )}
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Category
+                      <select
+                        value={form.category}
+                        onChange={(event) =>
+                          updateForm("category", event.target.value)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
+                      >
+                        <option value="">Patient category</option>
+
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.name}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="text-sm font-medium text-slate-700">
+                      Visit Type
+                      <select
+                        value={form.visitType}
+                        onChange={(event) =>
+                          updateForm("visitType", event.target.value)
+                        }
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
+                      >
+                        {visitTypes.map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
               </div>
-
-              <label className="text-sm font-medium text-slate-700">
-                Appointment Date
-                <input
-                  type="date"
-                  min={localDateKey()}
-                  value={form.dateKey}
-                  onChange={(event) =>
-                    updateForm("dateKey", event.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 outline-none focus:border-indigo-400"
-                />
-                <span className="mt-1.5 block text-xs font-normal text-slate-400">
-                  Staff can book appointments for today or any future available date.
-                </span>
-              </label>
-
-              <label className="text-sm font-medium text-slate-700">
-                City
-                <select
-                  value={form.city}
-                  disabled={
-                    !form.dateKey ||
-                    dateScheduleLoading
-                  }
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      city: event.target.value,
-                      locationId: "",
-                      startTime: "",
-                    }))
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <option value="">
-                    {dateScheduleLoading
-                      ? "Checking doctor schedule..."
-                      : !form.dateKey
-                        ? "Select date first"
-                        : formCities.length
-                          ? "Select available city"
-                          : "No clinic scheduled — choose another date"}
-                  </option>
-
-                  {formCities.map((city) => (
-                    <option key={city}>{city}</option>
-                  ))}
-                </select>
-
-                {form.dateKey &&
-                  !dateScheduleLoading &&
-                  !formCities.length && (
-                    <span className="mt-2 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                      Doctor has no clinic availability on this date. Select another future date to continue booking.
-                    </span>
-                  )}
-              </label>
-
-              <label className="text-sm font-medium text-slate-700">
-                Location
-                <select
-                  value={form.locationId}
-                  disabled={!form.city || !formLocations.length}
-                  onChange={(event) =>
-                    updateForm("locationId", event.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <option value="">
-                    {!form.city
-                      ? "Select available city first"
-                      : "Select available location"}
-                  </option>
-
-                  {formLocations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="text-sm font-medium text-slate-700">
-                Category
-                <select
-                  value={form.category}
-                  onChange={(event) =>
-                    updateForm("category", event.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
-                >
-                  <option value="">Patient category</option>
-
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.name}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="text-sm font-medium text-slate-700">
-                Visit Type
-                <select
-                  value={form.visitType}
-                  onChange={(event) =>
-                    updateForm("visitType", event.target.value)
-                  }
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3"
-                >
-                  {visitTypes.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
             {showNewPatient && !form.patientId && (
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-4">
@@ -1395,125 +1477,54 @@ export default function Appointments() {
                   </button>
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <label className="text-xs font-semibold text-slate-600">
-                    Full Name *
-                    <input
-                      value={newPatient.fullName}
-                      onChange={(event) =>
-                        updateNewPatient("fullName", event.target.value)
-                      }
-                      placeholder="Patient full name"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
-                    />
-                  </label>
+                  <div className="mt-4 grid gap-4 md:grid-cols-3">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Contact Number *
+                      <input
+                        value={newPatient.mobile}
+                        onChange={(event) =>
+                          updateNewPatient("mobile", event.target.value)
+                        }
+                        placeholder="+91 Contact Number"
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
+                      />
+                    </label>
 
-                  <label className="text-xs font-semibold text-slate-600">
-                    Mobile *
-                    <input
-                      value={newPatient.mobile}
-                      onChange={(event) =>
-                        updateNewPatient("mobile", event.target.value)
-                      }
-                      placeholder="+91 9876543210"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
-                    />
-                  </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Patient Name *
+                      <input
+                        value={newPatient.fullName}
+                        onChange={(event) =>
+                          updateNewPatient("fullName", event.target.value)
+                        }
+                        placeholder="Patient Name"
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
+                      />
+                    </label>
 
-                  <label className="text-xs font-semibold text-slate-600">
-                    WhatsApp
-                    <input
-                      value={newPatient.whatsapp}
-                      onChange={(event) =>
-                        updateNewPatient("whatsapp", event.target.value)
-                      }
-                      placeholder="+91 9876543210"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
-                    />
-                  </label>
-
-                  <label className="text-xs font-semibold text-slate-600">
-                    Age
-                    <input
-                      type="number"
-                      min="0"
-                      max="150"
-                      value={newPatient.age}
-                      onChange={(event) =>
-                        updateNewPatient("age", event.target.value)
-                      }
-                      placeholder="Age"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
-                    />
-                  </label>
-
-                  <label className="text-xs font-semibold text-slate-600">
-                    Gender
-                    <select
-                      value={newPatient.gender}
-                      onChange={(event) =>
-                        updateNewPatient("gender", event.target.value)
-                      }
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal"
-                    >
-                      <option value="">Select gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                      <option value="Prefer_not_to_say">
-                        Prefer not to say
-                      </option>
-                    </select>
-                  </label>
-
-                  <CityStateAutocomplete
-                    city={newPatient.city}
-                    state={newPatient.state}
-                    disabled={patientSaving}
-                    onChange={(location) =>
-                      setNewPatient((current) => ({
-                        ...current,
-                        city: location.city,
-                        state: location.state,
-                      }))
-                    }
-                  />
-
-                  <label className="text-xs font-semibold text-slate-600">
-                    Category
-                    <select
-                      value={newPatient.category}
-                      onChange={(event) =>
-                        updateNewPatient("category", event.target.value)
-                      }
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal"
-                    >
-                      <option value="Other">Other</option>
-
-                      {categories.map((category) => (
-                        <option
-                          key={category.id}
-                          value={category.name}
-                        >
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="text-xs font-semibold text-slate-600">
-                    Diagnosis
-                    <input
-                      value={newPatient.diagnosis}
-                      onChange={(event) =>
-                        updateNewPatient("diagnosis", event.target.value)
-                      }
-                      placeholder="Optional"
-                      className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-indigo-500"
-                    />
-                  </label>
-                </div>
-
+                    <label className="text-xs font-semibold text-slate-600">
+                      District *
+                      <select
+                        value={newPatient.city || form.city}
+                        onChange={(event) =>
+                          setNewPatient((current) => ({
+                            ...current,
+                            city: event.target.value,
+                            state: "Rajasthan",
+                          }))
+                        }
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal"
+                      >
+                        {["Jaipur", "Kota", "Jodhpur", "Sikar", "Ajmer"].map(
+                          (district) => (
+                            <option key={district} value={district}>
+                              {district}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                  </div>
                 <div className="mt-4 flex justify-end">
                   <button
                     type="button"
@@ -1531,62 +1542,6 @@ export default function Appointments() {
                 </div>
               </div>
             )}
-
-            <div>
-              <p className="text-sm font-medium text-slate-700">
-                Available Slots
-              </p>
-
-              {slotsLoading ? (
-                <p className="mt-3 text-sm text-slate-500">
-                  Loading slots...
-                </p>
-              ) : slotsMode === "unavailable" ? (
-                <div className="mt-3 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
-                  Doctor unavailable on this date.
-                  {slotsNote ? ` ${slotsNote}` : ""}
-                </div>
-              ) : slots.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {slots.map((slot) => (
-                    <button
-                      key={slot.slotKey}
-                      type="button"
-                      disabled={!slot.available}
-                      onClick={() =>
-                        updateForm("startTime", slot.startTime)
-                      }
-                      className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
-                        !slot.available
-                          ? "bg-slate-100 text-slate-300"
-                          : form.startTime === slot.startTime
-                            ? "border-indigo-600 bg-indigo-600 text-white"
-                            : "border-slate-200 text-slate-600"
-                      }`}
-                    >
-                      {timeLabel(slot.startTime)}
-                    </button>
-                  ))}
-                </div>
-              ) : !form.locationId ? (
-                <p className="mt-3 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-400">
-                  Select city and location to see appointment times.
-                </p>
-              ) : (
-                <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-800">
-                    Doctor is not available at{" "}
-                    {selectedFormLocation?.name || "this location"} on{" "}
-                    {dateLabel(form.dateKey)}.
-                  </p>
-
-                  <p className="mt-1 text-xs text-amber-700">
-                    Choose another date or location. If the doctor should be
-                    available here, update the Availability planner first.
-                  </p>
-                </div>
-              )}
-            </div>
 
             <div className="grid gap-4 md:grid-cols-3">
               <label className="text-sm font-medium text-slate-700">

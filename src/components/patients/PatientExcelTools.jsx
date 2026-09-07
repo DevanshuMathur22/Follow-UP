@@ -1674,7 +1674,6 @@ export default function PatientExcelTools({
                 item.patient,
               ),
             );
-
             updated += 1;
           } else {
             await createPatient(
@@ -1682,7 +1681,6 @@ export default function PatientExcelTools({
                 item.patient,
               ),
             );
-
             added += 1;
           }
         } catch {
@@ -1955,6 +1953,7 @@ export default function PatientExcelTools({
 
               <button
                 type="button"
+
                 disabled={importing}
                 onClick={resetImport}
                 className="rounded-lg border border-slate-200 p-2 text-slate-500"
@@ -1962,6 +1961,7 @@ export default function PatientExcelTools({
                 <X size={17} />
               </button>
             </div>
+
 
             <div className="overflow-auto">
               <table className="w-full min-w-[920px] text-left">
