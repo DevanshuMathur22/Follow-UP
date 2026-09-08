@@ -9,33 +9,6 @@ import {
 import { getSessionUser } from "../../../src/lib/auth";
 import prisma from "../../../src/lib/prisma";
 
-function parseInterval(value, fallback = null) {
-  if (value === undefined || value === null || value === "") {
-    return fallback;
-  }
-
-  if (typeof value !== "number" && typeof value !== "string") {
-    return null;
-  }
-
-  const text = String(value).trim();
-
-  if (!/^\d+$/.test(text)) {
-    return null;
-  }
-
-  const days = Number(text);
-
-  if (
-    !Number.isInteger(days) ||
-    days < 1 ||
-    days > 3650
-  ) {
-    return null;
-  }
-
-  return days;
-}
 
 export async function GET() {
   try {
@@ -138,19 +111,7 @@ export async function POST(request) {
       );
     }
 
-    const followUpIntervalDays = parseInterval(
-      body.followUpIntervalDays,
-      30,
-    );
-
-    if (!followUpIntervalDays) {
-      return Response.json(
-        {
-          message: "Invalid follow-up interval",
-        },
-        { status: 400 },
-      );
-    }
+    const followUpIntervalDays = 30;
 
     const existing = await prisma.category.findFirst({
       where: {

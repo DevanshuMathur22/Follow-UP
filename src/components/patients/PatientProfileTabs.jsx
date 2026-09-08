@@ -1,29 +1,18 @@
 import {
   Activity,
-  CalendarDays,
   FileText,
-  History,
-  UserRound,
 } from "lucide-react";
 import {
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { toast } from "react-hot-toast";
 import { formatDate } from "../../lib/format";
-import {
-  createFollowUp,
-  updateFollowUp,
-} from "../../services/clinicService";
-import PatientTimeline from "./PatientTimeline";
 import PatientPrescriptions from "./PatientPrescriptions";
 
 const profileTabs = [
-  { name: "Overview", icon: UserRound },
   { name: "Prescriptions", icon: FileText },
   { name: "Follow-ups", icon: Activity },
-  { name: "Timeline", icon: History },
 ];
 
 function toTimestamp(value) {
@@ -49,24 +38,6 @@ function sortedByDate(items) {
   );
 }
 
-function dateTimeLocalValue(value) {
-  const date = new Date(value || "");
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return (
-    [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0"),
-    ].join("-") +
-    `T${String(date.getHours()).padStart(2, "0")}:${String(
-      date.getMinutes(),
-    ).padStart(2, "0")}`
-  );
-}
 
 function statusTone(value) {
   const status = String(value || "").toLowerCase();
@@ -151,7 +122,6 @@ export default function PatientProfileTabs({
   patient,
   followUps = [],
   prescriptions = [],
-  activities = [],
   onRefresh,
   doctorMode = false,
 }) {
@@ -161,21 +131,10 @@ export default function PatientProfileTabs({
       )
     : profileTabs;
   const [activeTab, setActiveTab] =
-    useState("Overview");
-  const [showFollowUpEditor, setShowFollowUpEditor] =
-    useState(false);
-  const [followUpSaving, setFollowUpSaving] =
-    useState(false);
-  const [followUpForm, setFollowUpForm] = useState({
-    dueDate: "",
-    type: "call",
-    priority: "medium",
-    notes: "",
-  });
+    useState("Prescriptions");
 
   useEffect(() => {
-    setActiveTab("Overview");
-    setShowFollowUpEditor(false);
+    setActiveTab("Prescriptions");
   }, [patient?.id]);
 
   const recentFollowUps = useMemo(
@@ -183,132 +142,11 @@ export default function PatientProfileTabs({
     [followUps],
   );
 
-  const recentPrescriptions = useMemo(
-    () =>
-      [...prescriptions]
-        .sort(
-          (first, second) =>
-            toTimestamp(
-              second.issuedAt ||
-                second.visitDate ||
-                second.createdAt,
-            ) -
-            toTimestamp(
-              first.issuedAt ||
-                first.visitDate ||
-                first.createdAt,
-            ),
-        )
-        .slice(0, 3),
-    [prescriptions],
-  );
 
-  const nextScheduledFollowUp = useMemo(
-    () =>
-      [...followUps]
-        .filter(
-          (followUp) =>
-            !["completed", "cancelled"].includes(
-              String(
-                followUp.status || "",
-              ).toLowerCase(),
-            ),
-        )
-        .sort(
-          (first, second) =>
-            toTimestamp(first.dueDate) -
-            toTimestamp(second.dueDate),
-        )[0] || null,
-    [followUps],
-  );
 
-  const completedCount = followUps.filter(
-    (followUp) =>
-      String(followUp.status || "").toLowerCase() ===
-      "completed",
-  ).length;
 
-  const pendingCount = followUps.filter(
-    (followUp) =>
-      !["completed", "cancelled"].includes(
-        String(followUp.status || "").toLowerCase(),
-      ),
-  ).length;
 
-  function openFollowUpEditor() {
-    setFollowUpForm({
-      dueDate: dateTimeLocalValue(
-        nextScheduledFollowUp?.dueDate ||
-          patient?.nextFollowUp,
-      ),
-      type: String(
-        nextScheduledFollowUp?.type || "call",
-      ).toLowerCase(),
-      priority: String(
-        nextScheduledFollowUp?.priority || "medium",
-      ).toLowerCase(),
-      notes: nextScheduledFollowUp?.notes || "",
-    });
 
-    setShowFollowUpEditor(true);
-  }
-
-  async function saveProfileFollowUp(event) {
-    event.preventDefault();
-
-    if (!followUpForm.dueDate) {
-      toast.error("Select follow-up date and time");
-      return;
-    }
-
-    try {
-      setFollowUpSaving(true);
-
-      const dueDate = new Date(
-        followUpForm.dueDate,
-      ).toISOString();
-
-      if (nextScheduledFollowUp?.id) {
-        await updateFollowUp(
-          nextScheduledFollowUp.id,
-          {
-            dueDate,
-            type: followUpForm.type,
-            priority: followUpForm.priority,
-            notes: followUpForm.notes.trim(),
-            status: "Scheduled",
-            expectedUpdatedAt:
-              nextScheduledFollowUp.updatedAt,
-          },
-        );
-
-        toast.success("Next follow-up changed");
-      } else {
-        await createFollowUp({
-          patientId: patient.id,
-          dueDate,
-          type: followUpForm.type,
-          priority: followUpForm.priority,
-          notes: followUpForm.notes.trim(),
-        });
-
-        toast.success("Follow-up scheduled");
-      }
-
-      setShowFollowUpEditor(false);
-
-      if (onRefresh) {
-        await onRefresh();
-      }
-    } catch (error) {
-      toast.error(
-        error.response?.data?.message ||
-          "Unable to save follow-up",
-      );
-    } finally {
-      setFollowUpSaving(false);
-    }
-  }
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -340,378 +178,6 @@ export default function PatientProfileTabs({
       </div>
 
       <div className="p-5 sm:p-6">
-        {activeTab === "Overview" && (
-          <div
-            className={`grid gap-6 ${
-              doctorMode
-                ? ""
-                : "xl:grid-cols-[minmax(0,1fr)_360px]"
-            }`}
-          >
-            <div>
-              <p className="text-xs font-semibold tracking-[0.16em] text-slate-400">
-                PATIENT SUMMARY
-              </p>
-
-              <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <dt className="text-sm text-slate-400">
-                    Primary diagnosis
-                  </dt>
-                  <dd className="mt-1 text-sm font-semibold text-slate-700">
-                    {patient?.diagnosis ||
-                      "Not recorded"}
-                  </dd>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <dt className="text-sm text-slate-400">
-                    Category
-                  </dt>
-                  <dd className="mt-2">
-                    <span className="inline-flex rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700">
-                      {patient?.category || "Other"}
-                    </span>
-                  </dd>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <dt className="text-sm text-slate-400">
-                    Known allergies
-                  </dt>
-                  <dd className="mt-1 text-sm font-semibold text-slate-700">
-                    {patient?.allergies ||
-                      "Not recorded"}
-                  </dd>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <dt className="text-sm text-slate-400">
-                    Contact
-                  </dt>
-                  <dd className="mt-1 text-sm font-semibold text-slate-700">
-                    {patient?.whatsapp ||
-                      patient?.mobile ||
-                      "Not recorded"}
-                  </dd>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2">
-                  <dt className="text-sm text-slate-400">
-                    Medical history
-                  </dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {patient?.history ||
-                      "No medical history recorded."}
-                  </dd>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2">
-                  <dt className="text-sm text-slate-400">
-                    Remarks
-                  </dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                    {patient?.remarks ||
-                      "No remarks recorded."}
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="mt-6 rounded-2xl border border-violet-100 bg-violet-50/30 p-4 sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-xl bg-violet-100 p-2.5 text-violet-700">
-                      <FileText size={18} />
-                    </div>
-
-                    <div>
-                      <p className="font-semibold text-slate-800">
-                        Previous Prescriptions
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Latest prescription history for quick review.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("Prescriptions")}
-                    className="w-fit rounded-xl border border-violet-200 bg-white px-3.5 py-2 text-xs font-semibold text-violet-700 transition hover:bg-violet-50"
-                  >
-                    View All
-                  </button>
-                </div>
-
-                {recentPrescriptions.length ? (
-                  <div className="mt-4 divide-y divide-violet-100 overflow-hidden rounded-xl border border-violet-100 bg-white">
-                    {recentPrescriptions.map((prescription) => (
-                      <div
-                        key={prescription.id}
-                        className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-semibold text-slate-800">
-                              Prescription
-                            </p>
-
-                            <span className="rounded-lg bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700">
-                              {formatDate(
-                                prescription.issuedAt ||
-                                  prescription.visitDate ||
-                                  prescription.createdAt,
-                              )}
-                            </span>
-                          </div>
-
-                          {prescription.doctor && (
-                            <p className="mt-1 text-xs text-slate-500">
-                              {prescription.doctor}
-                            </p>
-                          )}
-
-                          {prescription.diagnosis && (
-                            <p className="mt-1 truncate text-xs text-slate-600">
-                              {prescription.diagnosis}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex shrink-0 gap-2">
-                          {prescription.attachmentUrl && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                window.open(
-                                  prescription.attachmentUrl,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                )
-                              }
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                            >
-                              View
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab("Prescriptions")}
-                            className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-700"
-                          >
-                            History
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-dashed border-violet-200 bg-white p-5 text-center">
-                    <p className="text-sm font-semibold text-slate-700">
-                      No previous prescription
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Uploaded prescriptions will appear here.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {!doctorMode && (
-              <aside className="rounded-2xl bg-teal-50 p-5">
-              <div className="flex items-center gap-2 text-teal-800">
-                <CalendarDays size={19} />
-                <p className="text-sm font-semibold">
-                  Next Follow-up
-                </p>
-              </div>
-
-              <p className="mt-5 text-2xl font-semibold tracking-tight text-slate-800">
-                {nextScheduledFollowUp?.dueDate
-                  ? formatDate(
-                      nextScheduledFollowUp.dueDate,
-                    )
-                  : patient?.nextFollowUp
-                    ? formatDate(
-                        patient.nextFollowUp,
-                      )
-                    : "Not scheduled"}
-              </p>
-
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                {nextScheduledFollowUp?.notes ||
-                  "No follow-up note added."}
-              </p>
-
-              <button
-                type="button"
-                onClick={openFollowUpEditor}
-                className="mt-4 w-full rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
-              >
-                {nextScheduledFollowUp
-                  ? "Change follow-up"
-                  : "Schedule follow-up"}
-              </button>
-
-              {showFollowUpEditor && (
-                <form
-                  onSubmit={saveProfileFollowUp}
-                  className="mt-4 space-y-3 rounded-xl border border-teal-100 bg-white p-4"
-                >
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Date and time
-                    <input
-                      required
-                      type="datetime-local"
-                      value={followUpForm.dueDate}
-                      onChange={(event) =>
-                        setFollowUpForm({
-                          ...followUpForm,
-                          dueDate:
-                            event.target.value,
-                        })
-                      }
-                      className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
-                    />
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="text-xs font-semibold text-slate-600">
-                      Type
-                      <select
-                        value={followUpForm.type}
-                        onChange={(event) =>
-                          setFollowUpForm({
-                            ...followUpForm,
-                            type:
-                              event.target.value,
-                          })
-                        }
-                        className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
-                      >
-                        <option value="call">
-                          Call
-                        </option>
-                        <option value="visit">
-                          Visit
-                        </option>
-                        <option value="message">
-                          Message
-                        </option>
-                        <option value="email">
-                          Email
-                        </option>
-                      </select>
-                    </label>
-
-                    <label className="text-xs font-semibold text-slate-600">
-                      Priority
-                      <select
-                        value={
-                          followUpForm.priority
-                        }
-                        onChange={(event) =>
-                          setFollowUpForm({
-                            ...followUpForm,
-                            priority:
-                              event.target.value,
-                          })
-                        }
-                        className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
-                      >
-                        <option value="low">
-                          Low
-                        </option>
-                        <option value="medium">
-                          Medium
-                        </option>
-                        <option value="high">
-                          High
-                        </option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <label className="block text-xs font-semibold text-slate-600">
-                    Notes
-                    <textarea
-                      rows="3"
-                      maxLength={3000}
-                      value={followUpForm.notes}
-                      onChange={(event) =>
-                        setFollowUpForm({
-                          ...followUpForm,
-                          notes:
-                            event.target.value,
-                        })
-                      }
-                      placeholder="Reason or instructions"
-                      className="mt-1.5 w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
-                    />
-                  </label>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={followUpSaving}
-                      onClick={() =>
-                        setShowFollowUpEditor(
-                          false,
-                        )
-                      }
-                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-xs font-semibold text-slate-600 disabled:opacity-60"
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={followUpSaving}
-                      className="flex-1 rounded-lg bg-teal-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
-                    >
-                      {followUpSaving
-                        ? "Saving…"
-                        : "Save"}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              <div className="mt-6 grid grid-cols-3 gap-3 border-t border-teal-100 pt-5 text-center">
-                <div>
-                  <p className="text-lg font-semibold text-slate-800">
-                    {followUps.length}
-                  </p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Total
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-lg font-semibold text-emerald-700">
-                    {completedCount}
-                  </p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Completed
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-lg font-semibold text-amber-700">
-                    {pendingCount}
-                  </p>
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                    Pending
-                  </p>
-                </div>
-              </div>
-              </aside>
-            )}
-          </div>
-        )}
-
         {activeTab === "Prescriptions" && (
           <PatientPrescriptions
             patient={patient}
@@ -859,27 +325,6 @@ export default function PatientProfileTabs({
           </div>
         )}
 
-        {activeTab === "Timeline" && (
-          <div>
-            <RecordHeader
-              title="Patient Timeline"
-              description="Chronological patient and follow-up activity."
-              count={
-                activities.length ||
-                followUps.length +
-                  (patient?.createdAt ? 1 : 0)
-              }
-              icon={History}
-              tone="bg-slate-100 text-slate-600"
-            />
-
-            <PatientTimeline
-              patient={patient}
-              followUps={followUps}
-              activities={activities}
-            />
-          </div>
-        )}
       </div>
     </section>
   );

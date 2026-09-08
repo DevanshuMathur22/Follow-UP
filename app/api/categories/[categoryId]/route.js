@@ -12,106 +12,9 @@ import {
 import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 
-function parseInterval(value, fallback) {
-  if (value === undefined) {
-    return fallback;
-  }
 
-  if (
-    value === null ||
-    (typeof value !== "number" && typeof value !== "string")
-  ) {
-    return null;
-  }
 
-  const text = String(value).trim();
 
-  if (!/^\d+$/.test(text)) {
-    return null;
-  }
-
-  const days = Number(text);
-
-  if (
-    !Number.isInteger(days) ||
-    days < 1 ||
-    days > 3650
-  ) {
-    return null;
-  }
-
-  return days;
-}
-
-function calculateNextDate(days) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
-async function syncPatientNextFollowUp(patientId) {
-  const next = await prisma.followUp.findFirst({
-    where: {
-      patientId,
-      status: "Scheduled",
-    },
-    orderBy: {
-      dueDate: "asc",
-    },
-    select: {
-      dueDate: true,
-    },
-  });
-
-  await prisma.patient.update({
-    where: {
-      id: patientId,
-    },
-    data: {
-      nextFollowUp: next?.dueDate || null,
-    },
-  });
-}
-
-async function applyCategoryRule(patientId, categoryName, days) {
-  const dueDate = calculateNextDate(days);
-
-  const existingFollowUp = await prisma.followUp.findFirst({
-    where: {
-      patientId,
-      status: "Scheduled",
-      source: "category",
-    },
-    orderBy: {
-      dueDate: "asc",
-    },
-  });
-
-  if (existingFollowUp) {
-    await prisma.followUp.update({
-      where: {
-        id: existingFollowUp.id,
-      },
-      data: {
-        dueDate,
-      },
-    });
-  } else {
-    await prisma.followUp.create({
-      data: {
-        patientId,
-        dueDate,
-        type: "call",
-        priority: "medium",
-        status: "Scheduled",
-        source: "category",
-        notes: `Category follow-up: ${categoryName}`,
-      },
-    });
-  }
-
-  await syncPatientNextFollowUp(patientId);
-}
 
 export async function PATCH(request, { params }) {
   const originError = validateWriteOrigin(request);
@@ -208,19 +111,8 @@ export async function PATCH(request, { params }) {
       }
     }
 
-    const followUpIntervalDays = parseInterval(
-      body.followUpIntervalDays,
-      current.followUpIntervalDays,
-    );
-
-    if (!followUpIntervalDays) {
-      return Response.json(
-        {
-          message: "Invalid follow-up interval",
-        },
-        { status: 400 },
-      );
-    }
+    const followUpIntervalDays =
+      current.followUpIntervalDays;
 
     let active = current.active;
 
@@ -235,21 +127,6 @@ export async function PATCH(request, { params }) {
       }
 
       active = body.active;
-    }
-
-    let applyToPatients = false;
-
-    if (body.applyToPatients !== undefined) {
-      if (typeof body.applyToPatients !== "boolean") {
-        return Response.json(
-          {
-            message: "Invalid applyToPatients value",
-          },
-          { status: 400 },
-        );
-      }
-
-      applyToPatients = body.applyToPatients;
     }
 
     const duplicate = await prisma.category.findFirst({
@@ -301,40 +178,7 @@ export async function PATCH(request, { params }) {
       });
     }
 
-    let processedPatients = 0;
-
-    if (applyToPatients && active) {
-      const patients = await prisma.patient.findMany({
-        where: {
-          isDeleted: false,
-          status: "active",
-          category: {
-            equals: name,
-            mode: "insensitive",
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      for (const patient of patients) {
-        await applyCategoryRule(
-          patient.id,
-          category.name,
-          category.followUpIntervalDays,
-        );
-
-        processedPatients += 1;
-      }
-    }
-
-    return Response.json({
-      ...category,
-      application: {
-        processedPatients,
-      },
-    });
+    return Response.json(category);
   } catch (error) {
     console.error("UPDATE CATEGORY ERROR:", error);
 
