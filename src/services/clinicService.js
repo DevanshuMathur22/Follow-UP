@@ -293,10 +293,43 @@ function invoiceStatus(status) {
 }
 
 
-export async function getPatients() {
-  const result = unwrap(await api.get("/patients"));
-  const items = Array.isArray(result) ? result : result?.patients || [];
+export async function getPatients(search = "", limit = 0) {
+  const params = {};
+
+  if (search) params.search = search;
+  if (limit > 0) params.limit = limit;
+
+  const result = unwrap(
+    await api.get("/patients", {
+      params: Object.keys(params).length
+        ? params
+        : undefined,
+    }),
+  );
+
+  const items =
+    Array.isArray(result)
+      ? result
+      : result?.patients || [];
+
   return items.map(normalizePatient);
+}
+
+
+export async function getDashboardPatients() {
+  const result = unwrap(
+    await api.get("/patients", {
+      params: {
+        limit: 5,
+        count: 1,
+      },
+    }),
+  );
+
+  return {
+    patients: (result?.patients || []).map(normalizePatient),
+    totalCount: Number(result?.totalCount || 0),
+  };
 }
 
 
@@ -353,65 +386,105 @@ export async function getCategories() {
 }
 
 
-export async function createCategory(input, { applyToPatients = true } = {}) {
-  const payload = {
-    ...input,
-    followUpIntervalDays: Number(input.followUpIntervalDays),
-    applyToPatients,
-  };
-
-  const response = await api.post("/categories", payload);
+export async function createCategory(input) {
+  const response = await api.post("/categories", {
+    name: input.name,
+  });
   const data = unwrap(response);
   const category = data?.category || data;
 
   return {
     category: normalizeCategory(category),
-    updatedPatients: Number(
-      data?.application?.processedPatients ??
-      response.data?.application?.processedPatients ??
-      0
-    ),
   };
 }
 
-
-export async function updateCategory(categoryId, input, { applyToPatients = false } = {}) {
-  const payload = {
-    ...input,
-    followUpIntervalDays: Number(input.followUpIntervalDays),
-    applyToPatients,
-  };
-
-  const response = await api.patch(`/categories/${categoryId}`, payload);
+export async function updateCategory(categoryId, input) {
+  const response = await api.patch(`/categories/${categoryId}`, {
+    name: input.name,
+    active: input.active,
+  });
   const data = unwrap(response);
   const category = data?.category || data;
 
   return {
     category: normalizeCategory(category),
-    updatedPatients: Number(
-      data?.application?.processedPatients ??
-      data?.updatedPatients ??
-      data?.syncedPatients ??
-      response.data?.application?.processedPatients ??
-      0
-    ),
+  };
+}
+
+export async function getDashboardFollowUps() {
+  const now = new Date();
+  const dayEnd = new Date(now);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const result = unwrap(
+    await api.get("/follow-ups", {
+      params: {
+        dashboard: 1,
+        now: now.toISOString(),
+        dayEnd: dayEnd.toISOString(),
+      },
+    }),
+  );
+
+  const items = result?.followUps || [];
+
+  return {
+    followUps: items.map((item) => {
+      const patient = item.patient;
+
+      return {
+        ...item,
+        id: getId(item),
+        patientId: item.patientId || patient?.id || patient?._id,
+        patientName: item.patientName || patient?.fullName,
+        mobile: item.mobile || patient?.mobile,
+        whatsapp: item.whatsapp || patient?.whatsapp,
+        city: item.city || patient?.city,
+        category: item.category || patient?.category,
+        dueDate: item.dueDate || item.dueAt,
+        status: getFollowUpStatus(
+          item.status,
+          item.dueDate || item.dueAt,
+          now,
+        ),
+      };
+    }),
+    counts: {
+      today: Number(result?.counts?.today || 0),
+      overdue: Number(result?.counts?.overdue || 0),
+    },
   };
 }
 
 
-export async function getFollowUps() {
-  const result = unwrap(await api.get("/follow-ups"));
-  const items = Array.isArray(result) ? result : result?.followUps || [];
+export async function getFollowUps(patientId = "") {
+  const result = unwrap(
+    await api.get("/follow-ups", {
+      params: patientId ? { patientId } : undefined,
+    }),
+  );
+
+  const items =
+    Array.isArray(result)
+      ? result
+      : result?.followUps || [];
+
   const patientMap = new Map(
     items
       .map((item) => item.patient)
       .filter(Boolean)
-      .map((patient) => [getId(patient), normalizePatient(patient)])
+      .map((patient) => [
+        getId(patient),
+        normalizePatient(patient),
+      ]),
   );
 
   return items.map((item) => ({
     ...normalizeRelated(item, patientMap),
-    status: getFollowUpStatus(item.status, item.dueDate || item.dueAt),
+    status: getFollowUpStatus(
+      item.status,
+      item.dueDate || item.dueAt,
+    ),
     dueDate: item.dueDate || item.dueAt,
   }));
 }

@@ -118,43 +118,58 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
+    const requestedLimit = Number(searchParams.get("limit") || 0);
+    const limit =
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(Math.trunc(requestedLimit), 100)
+        : null;
+    const includeCount = searchParams.get("count") === "1";
 
-    const patients = await prisma.patient.findMany({
-      where: {
-        isDeleted: false,
-        ...(search
-          ? {
-              OR: [
-                {
-                  fullName: {
-                    contains: search,
-                    mode: "insensitive",
-                  },
+    const where = {
+      isDeleted: false,
+      ...(search
+        ? {
+            OR: [
+              {
+                fullName: {
+                  contains: search,
+                  mode: "insensitive",
                 },
-                {
-                  mobile: {
-                    contains: search,
-                    mode: "insensitive",
-                  },
+              },
+              {
+                mobile: {
+                  contains: search,
+                  mode: "insensitive",
                 },
-                {
-                  patientCode: {
-                    contains: search,
-                    mode: "insensitive",
-                  },
+              },
+              {
+                patientCode: {
+                  contains: search,
+                  mode: "insensitive",
                 },
-              ],
-            }
-          : {}),
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [patients, totalCount] = await Promise.all([
+      prisma.patient.findMany({
+        where,
+        orderBy: {
+          createdAt: "desc",
+        },
+        ...(limit ? { take: limit } : {}),
+      }),
+      includeCount
+        ? prisma.patient.count({ where })
+        : Promise.resolve(null),
+    ]);
 
     return Response.json({
       success: true,
       patients,
+      ...(includeCount ? { totalCount } : {}),
     });
   } catch (error) {
     console.error("GET PATIENTS ERROR:", error);
@@ -294,57 +309,6 @@ export async function POST(request) {
       relatedPath: `/patients/${patient.id}`,
     });
 
-    const category = await prisma.category.findUnique({
-      where: {
-        name: patient.category,
-      },
-    });
-
-    if (category?.followUpIntervalDays) {
-      const nextFollowUp = new Date(patient.createdAt);
-
-      nextFollowUp.setDate(
-        nextFollowUp.getDate() + category.followUpIntervalDays
-      );
-
-      await prisma.patient.update({
-        where: {
-          id: patient.id,
-        },
-        data: {
-          nextFollowUp,
-        },
-      });
-
-      const autoFollowUp = await prisma.followUp.create({
-        data: {
-          patientId: patient.id,
-          dueDate: nextFollowUp,
-          type: "call",
-          priority: "medium",
-          status: "Scheduled",
-          source: "category",
-          notes: "Auto generated follow-up",
-        },
-      });
-
-      await logActivity({
-      actor: sessionUser,
-        module: "follow-up",
-        action: "scheduled",
-        title: "Automatic follow-up scheduled",
-        description: `${patient.fullName} · ${patient.category}`,
-        patientId: patient.id,
-        recordId: autoFollowUp.id,
-        relatedPath: `/patients/${patient.id}`,
-      });
-
-      patient = await prisma.patient.findUnique({
-        where:{
-          id:patient.id,
-        },
-      });
-    }
 
     return Response.json(
       {

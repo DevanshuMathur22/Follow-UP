@@ -14,7 +14,6 @@ import {
   archivePatient,
   getPatients,
 } from "../services/clinicService";
-import { getCurrentUser } from "../services/authService";
 import {
   hasPermission,
   permissions,
@@ -49,13 +48,21 @@ export default function Patients() {
     }
   }
 
-  async function loadAccess() {
+  function loadAccess() {
     try {
-      const user = await getCurrentUser();
+      const cached = JSON.parse(
+        window.localStorage.getItem("caretrack-user") ||
+          "null",
+      );
+
+      const role =
+        cached?.role ||
+        cached?.user?.role ||
+        "";
 
       setCanArchive(
         hasPermission(
-          user?.role,
+          role,
           permissions.ARCHIVE_PATIENTS,
         ),
       );
@@ -93,7 +100,7 @@ export default function Patients() {
 
   useEffect(() => {
     void loadPatients();
-    void loadAccess();
+    loadAccess();
 
     const refresh = () => {
       if (document.visibilityState === "visible") {

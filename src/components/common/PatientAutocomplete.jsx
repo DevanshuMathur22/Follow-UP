@@ -18,6 +18,7 @@ export default function PatientAutocomplete({
   patients = [],
   value = "",
   onChange,
+  onQueryChange,
   label = "Patient",
   placeholder = "Search name, ID or mobile...",
   required = false,
@@ -116,6 +117,7 @@ export default function PatientAutocomplete({
 
   function clear() {
     setQuery("");
+    onQueryChange?.("");
     onChange?.("", null);
     setOpen(false);
     setActiveIndex(-1);
@@ -183,7 +185,10 @@ export default function PatientAutocomplete({
           }}
           onKeyDown={handleKeyDown}
           onChange={(event) => {
-            setQuery(event.target.value);
+              const nextQuery = event.target.value;
+
+              setQuery(nextQuery);
+              onQueryChange?.(nextQuery);
             setOpen(true);
             setActiveIndex(-1);
 

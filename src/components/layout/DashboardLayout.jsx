@@ -10,13 +10,14 @@ import { getCurrentUser } from "../../services/authService";
 export default function DashboardLayout({ children, focusMode = false }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [sessionUser, setSessionUser] = useState(null);
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [remindersReady, setRemindersReady] = useState(false);
   const reminders = useFollowUpReminders({
-    enabled: ready && remindersEnabled,
-    pollInterval: 15_000,
+    enabled: remindersReady && remindersEnabled,
+    pollInterval: 60_000,
   });
 
   const liveNotifications = useMemo(
@@ -90,6 +91,20 @@ export default function DashboardLayout({ children, focusMode = false }) {
   );
 
   useEffect(() => {
+    try {
+      const cachedUser = JSON.parse(
+        window.localStorage.getItem("caretrack-user") || "null",
+      );
+
+      if (cachedUser) {
+        setSessionUser(cachedUser);
+      }
+    } catch {
+      window.localStorage.removeItem("caretrack-user");
+    }
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     async function verifySession() {
@@ -103,7 +118,6 @@ export default function DashboardLayout({ children, focusMode = false }) {
           window.localStorage.setItem("caretrack-user", JSON.stringify(session.user));
         }
 
-        setReady(true);
       } catch {
         window.localStorage.removeItem("caretrack-token");
         window.localStorage.removeItem("caretrack-user");
@@ -122,6 +136,14 @@ export default function DashboardLayout({ children, focusMode = false }) {
   }, [pathname, router]);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setRemindersReady(true);
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     function syncReminderSetting() {
       try {
         const settings = JSON.parse(window.localStorage.getItem("caretrack-settings") || "{}");
@@ -135,16 +157,6 @@ export default function DashboardLayout({ children, focusMode = false }) {
     window.addEventListener("caretrack-settings-changed", syncReminderSetting);
     return () => window.removeEventListener("caretrack-settings-changed", syncReminderSetting);
   }, []);
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-medium text-slate-500 shadow-sm">
-          Opening secure workspace…
-        </div>
-      </div>
-    );
-  }
 
   if (focusMode) {
     return (
@@ -178,7 +190,11 @@ export default function DashboardLayout({ children, focusMode = false }) {
       <div className="min-w-0 flex-1">
         <Header
           onMenuClick={() => setMobileNavOpen(true)}
-          reminderCount={remindersEnabled ? liveNotifications.length : 0}
+          reminderCount={
+  remindersEnabled
+    ? reminders.counts.needsAttention
+    : 0
+}
           reminderStatus={reminders.status}
           notifications={liveNotifications}
         />

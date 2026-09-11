@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
   createPatient,
   createPrescription,
   getCategories,
+    getPatients,
 } from "../services/clinicService";
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
@@ -41,6 +42,12 @@ export default function AddPatient() {
 
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [duplicateInput, setDuplicateInput] = useState(null);
+  const [possibleDuplicate, setPossibleDuplicate] = useState(null);
+
+
+  const [duplicatePatient, setDuplicatePatient] =
+    useState(null);
 
   const [prescriptionFile, setPrescriptionFile] = useState(null);
   const [prescription, setPrescription] = useState({
@@ -55,6 +62,76 @@ export default function AddPatient() {
       .then(setCategories)
       .catch(() => toast.error("Categories could not be loaded"));
   }, []);
+
+  const handlePatientChange = useCallback((formData) => {
+    setDuplicateInput(formData);
+  }, []);
+
+  useEffect(() => {
+    if (!duplicateInput) return;
+
+    const normalize = (value) =>
+      String(value || "").trim().toLowerCase();
+
+    const digits = (value) =>
+      String(value || "").replace(/\D/g, "");
+
+    const name = normalize(duplicateInput.fullName);
+    const mobile = digits(duplicateInput.mobile);
+    const dob = String(duplicateInput.dob || "").slice(0, 10);
+
+    const search =
+      mobile.length >= 10
+        ? mobile
+        : name.length >= 3 && dob
+          ? duplicateInput.fullName.trim()
+          : "";
+
+    if (!search) {
+      setPossibleDuplicate(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      try {
+        const patients = await getPatients(search);
+
+        if (cancelled) return;
+
+        const match =
+          patients.find((patient) => {
+            const patientName = normalize(patient.fullName);
+            const patientMobile = digits(patient.mobile);
+            const patientDob = String(patient.dob || "").slice(0, 10);
+
+            const sameMobile =
+              mobile.length >= 10 &&
+              patientMobile === mobile;
+
+            const sameNameDob =
+              name &&
+              dob &&
+              patientName === name &&
+              patientDob === dob;
+
+            return sameMobile || sameNameDob;
+          }) || null;
+
+        setPossibleDuplicate(match);
+      } catch {
+        if (!cancelled) {
+          setPossibleDuplicate(null);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [duplicateInput]);
 
   function selectPrescriptionFile(file) {
     if (!file) {
@@ -111,6 +188,7 @@ export default function AddPatient() {
 
     try {
       setLoading(true);
+      setDuplicatePatient(null);
 
       patient = await createPatient(formData);
 
@@ -142,8 +220,16 @@ export default function AddPatient() {
 
       router.push(`/patients/${patient.id}`);
     } catch (error) {
+      const data = error.response?.data;
+
+      if (data?.code === "DUPLICATE_PATIENT" && data.patient) {
+        setDuplicatePatient(data.patient);
+        toast.error(data.message);
+        return;
+      }
+
       toast.error(
-        error.response?.data?.message ||
+        data?.message ||
           "Unable to save patient",
       );
     } finally {
@@ -332,8 +418,89 @@ export default function AddPatient() {
           </div>
         </div>
 
+          {duplicatePatient && (
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">
+                Possible duplicate patient
+              </p>
+
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-800">
+                    {duplicatePatient.fullName}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-600">
+                    {duplicatePatient.patientCode || "Existing patient"}
+                    {duplicatePatient.mobile ? ` · ${duplicatePatient.mobile}` : ""}
+                  </p>
+
+                  <p className="mt-1 text-xs text-amber-700">
+                    {duplicatePatient.isDeleted
+                      ? "This record is archived. Restore it instead of creating another patient."
+                      : "This patient already exists. Open the existing record instead."}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      duplicatePatient.isDeleted
+                        ? "/patients/archived"
+                        : `/patients/${duplicatePatient.id}`,
+                    )
+                  }
+                  className="shrink-0 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700"
+                >
+                  {duplicatePatient.isDeleted
+                    ? "Open Archived Patients"
+                    : "Open Existing Patient"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {possibleDuplicate && !duplicatePatient && (
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">
+                Possible duplicate
+              </p>
+
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-800">
+                    {possibleDuplicate.fullName}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-600">
+                    {possibleDuplicate.patientCode || "Existing patient"}
+                    {possibleDuplicate.mobile
+                      ? ` · ${possibleDuplicate.mobile}`
+                      : ""}
+                  </p>
+
+                  <p className="mt-1 text-xs text-amber-700">
+                    Similar patient details were found. Check the existing record before creating a new one.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/patients/${possibleDuplicate.id}`)
+                  }
+                  className="shrink-0 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-700"
+                >
+                  Open Existing Patient
+                </button>
+              </div>
+            </div>
+          )}
+
         <PatientForm
           onSubmit={handleAddPatient}
+            onChange={handlePatientChange}
           loading={loading}
           categories={categories}
         />

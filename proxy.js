@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import prisma from "./src/lib/prisma";
 import {
   SESSION_COOKIE,
   verifySessionToken,
@@ -39,36 +38,8 @@ function loginRedirect(request) {
   return NextResponse.redirect(loginUrl);
 }
 
-async function validateSession(token) {
-  const payload = verifySessionToken(token);
-
-  if (!payload) return null;
-
-  try {
-    const user = await prisma.user.findFirst({
-      where: {
-        id: payload.sub,
-        active: true,
-      },
-      select: {
-        id: true,
-        role: true,
-        sessionVersion: true,
-      },
-    });
-
-    if (
-      !user ||
-      user.sessionVersion !== payload.sessionVersion
-    ) {
-      return null;
-    }
-
-    return user;
-  } catch (error) {
-    console.error("PROXY SESSION ERROR:", error);
-    return null;
-  }
+function validateSession(token) {
+  return verifySessionToken(token);
 }
 
 export async function proxy(request) {
@@ -80,7 +51,7 @@ export async function proxy(request) {
   }
 
   const session = token
-    ? await validateSession(token)
+    ? validateSession(token)
     : null;
 
   if (pathname === "/") {

@@ -121,11 +121,12 @@ export default function NotificationDrawer({
       (item) => !item.actionable,
     );
 
-  const pendingCount = notifications.length
-    ? notifications.filter(
-        (item) => item.actionable === true,
-      ).length
-    : reminderCount;
+  const pendingCount = Math.max(
+    reminderCount,
+    notifications.filter(
+      (item) => item.actionable === true,
+    ).length,
+  );
 
   const unreadCount = unreadItems.length;
 

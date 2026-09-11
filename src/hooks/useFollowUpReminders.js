@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { getFollowUps } from "../services/clinicService";
+import { getDashboardFollowUps } from "../services/clinicService";
 
 const DEFAULT_POLL_INTERVAL = 60_000;
 const DEFAULT_CLOCK_INTERVAL = 15_000;
@@ -119,6 +119,10 @@ export default function useFollowUpReminders({
   clockInterval = DEFAULT_CLOCK_INTERVAL,
 } = {}) {
   const [followUps, setFollowUps] = useState([]);
+  const [serverCounts, setServerCounts] = useState({
+    today: 0,
+    overdue: 0,
+  });
   const [isLoading, setIsLoading] = useState(enabled);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -146,11 +150,17 @@ export default function useFollowUpReminders({
     if (isMounted.current) setIsLoading(true);
 
     try {
-      const nextFollowUps = await getFollowUps();
-      const normalizedFollowUps = Array.isArray(nextFollowUps) ? nextFollowUps : [];
+      const result = await getDashboardFollowUps();
+      const normalizedFollowUps = Array.isArray(result?.followUps)
+        ? result.followUps
+        : [];
 
       if (isMounted.current && requestNumber.current === requestId) {
         setFollowUps(normalizedFollowUps);
+        setServerCounts({
+          today: Number(result?.counts?.today || 0),
+          overdue: Number(result?.counts?.overdue || 0),
+        });
         setError(null);
         setLastUpdated(new Date());
       }
@@ -266,9 +276,12 @@ export default function useFollowUpReminders({
       if (Object.hasOwn(nextCounts, countKey)) nextCounts[countKey] += 1;
     });
 
-    nextCounts.needsAttention = nextCounts.today + nextCounts.overdue;
+    nextCounts.today = serverCounts.today;
+    nextCounts.overdue = serverCounts.overdue;
+    nextCounts.needsAttention =
+      serverCounts.today + serverCounts.overdue;
     return nextCounts;
-  }, [liveFollowUps]);
+  }, [liveFollowUps, serverCounts]);
 
   useEffect(() => {
     if (!enabled) return;

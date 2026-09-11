@@ -147,12 +147,16 @@ function buildFormValues(values) {
   };
 }
 
-export default function PatientForm({ onSubmit, loading, initialValues, onCancel, categories = [] }) {
+export default function PatientForm({ onSubmit, onChange, loading, initialValues, onCancel, categories = [] }) {
   const [formData, setFormData] = useState(() => buildFormValues(initialValues));
 
   useEffect(() => {
     setFormData(buildFormValues(initialValues));
   }, [initialValues]);
+
+  useEffect(() => {
+    onChange?.(formData);
+  }, [formData, onChange]);
 
   const categoryOptions = [
     ...new Set([

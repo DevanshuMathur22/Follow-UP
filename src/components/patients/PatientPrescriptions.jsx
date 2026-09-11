@@ -70,6 +70,9 @@ export default function PatientPrescriptions({
   const [showBuilder, setShowBuilder] =
     useState(false);
 
+  const [referencePrescription, setReferencePrescription] =
+    useState(null);
+
   const [showUpload, setShowUpload] =
     useState(false);
 
@@ -99,6 +102,9 @@ export default function PatientPrescriptions({
       ) || null,
     [records],
   );
+
+  const builderReference =
+    referencePrescription || latestDoctorPrescription;
 
   function selectFile(selected) {
     if (!selected) return;
@@ -272,6 +278,7 @@ export default function PatientPrescriptions({
           <button
             type="button"
             onClick={() => {
+                setReferencePrescription(null);
               setShowBuilder(
                 (current) => !current,
               );
@@ -316,7 +323,7 @@ export default function PatientPrescriptions({
           <DoctorPrescriptionBuilder
             patient={patient}
             previousPrescription={
-              latestDoctorPrescription
+                builderReference
             }
             onCancel={() =>
               setShowBuilder(false)
@@ -531,7 +538,21 @@ export default function PatientPrescriptions({
                       )}
                   </div>
 
-                  <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {item.recordType === "generated" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReferencePrescription(item);
+                            setShowUpload(false);
+                            setShowBuilder(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                        >
+                          Reuse
+                        </button>
+                      )}
+
                     <button
                       type="button"
                       onClick={() => view(item)}

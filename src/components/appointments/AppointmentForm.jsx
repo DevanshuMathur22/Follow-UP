@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ExternalLink,
@@ -19,21 +19,19 @@ import {
   createPatient,
   getAppointments,
   getAppointmentSearchContext,
+getAppointmentBookingOptions,
   getAppointmentSlots,
   getCategories,
   getClinicLocations,
+    getPatient,
   getPatients,
   updateAppointment,
 } from "../../services/clinicService";
 
 const visitTypes = [
-  ["consultation", "New Consultation"],
-  ["follow-up", "Follow-up Consultation"],
-  ["dbs", "DBS"],
-  ["botox", "Botox"],
-  ["procedure", "Procedure"],
-  ["review", "Review"],
-];
+["consultation", "New Consultation"],
+["follow-up", "Follow-up Consultation"],
+]
 
 function localDateKey(offset = 0) {
   const date = new Date();
@@ -134,10 +132,11 @@ export default function Appointments() {
   const [slotsMode, setSlotsMode] = useState("");
   const [slotsNote, setSlotsNote] = useState("");
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [clinicDates, setClinicDates] = useState([]);
+  const [clinicDatesLoading, setClinicDatesLoading] = useState(false);
+  const bookingOptionsCacheRef = useRef({});
 
-  const [dateSlots, setDateSlots] = useState([]);
   const [, setDateScheduleMode] = useState("");
-  const [dateScheduleLoading, setDateScheduleLoading] = useState(false);
 
   const [showNewPatient, setShowNewPatient] = useState(false);
   const [newPatient, setNewPatient] = useState(emptyPatientForm);
@@ -145,13 +144,11 @@ export default function Appointments() {
 
   async function loadBase() {
     try {
-      const [patientData, categoryData, locationData] = await Promise.all([
-        getPatients(),
+      const [categoryData, locationData] = await Promise.all([
         getCategories(),
         getClinicLocations(),
       ]);
 
-      setPatients(patientData || []);
       setCategories(
         (categoryData || []).filter((item) => item.active !== false),
       );
@@ -176,7 +173,13 @@ export default function Appointments() {
         date: selectedDate,
       });
 
-      setAppointments(data || []);
+      const nextAppointments = data || [];
+
+      setAppointments((current) =>
+        JSON.stringify(current) === JSON.stringify(nextAppointments)
+          ? current
+          : nextAppointments,
+      );
     } catch (error) {
       if (!silent) {
         toast.error(
@@ -191,12 +194,6 @@ export default function Appointments() {
     }
   }
 
-  async function refreshPatientsSilently() {
-    try {
-      const patientData = await getPatients();
-      setPatients(patientData || []);
-    } catch { void 0; }
-  }
 
   async function loadSearchAppointments() {
     try {
@@ -205,58 +202,144 @@ export default function Appointments() {
           localDateKey(),
         );
 
-      setSearchAppointments(data || []);
+      const nextSearchAppointments = data || [];
+
+      setSearchAppointments((current) =>
+        JSON.stringify(current) ===
+        JSON.stringify(nextSearchAppointments)
+          ? current
+          : nextSearchAppointments,
+      );
     } catch { void 0; }
   }
 
   async function loadDateSchedule(dateKey) {
     if (!dateKey) {
-      setDateSlots([]);
       setDateScheduleMode("");
       return;
     }
 
     try {
-      setDateScheduleLoading(true);
-
       const result = await getAppointmentSlots(dateKey);
 
-      setDateSlots(result?.slots || []);
       setDateScheduleMode(result?.mode || "");
     } catch (error) {
-      setDateSlots([]);
       setDateScheduleMode("");
 
       toast.error(
         error.response?.data?.message ||
           "Unable to load doctor schedule",
       );
-    } finally {
-      setDateScheduleLoading(false);
     }
   }
 
-  async function loadSlots(dateKey, locationId) {
+  async function loadSlots(
+    dateKey,
+    locationId,
+    { silent = false } = {},
+  ) {
     if (!dateKey || !locationId) {
       setSlots([]);
       return;
     }
 
     try {
-      setSlotsLoading(true);
+      if (!silent) {
+        setSlotsLoading(true);
+      }
 
-      const result = await getAppointmentSlots(dateKey, locationId);
-
-      setSlots(result?.slots || []);
-      setSlotsMode(result?.mode || "");
-      setSlotsNote(result?.note || "");
-    } catch (error) {
-      setSlots([]);
-      toast.error(
-        error.response?.data?.message || "Unable to load appointment slots",
+      const result = await getAppointmentSlots(
+        dateKey,
+        locationId,
       );
+
+      const nextSlots = result?.slots || [];
+      const nextMode = result?.mode || "";
+      const nextNote = result?.note || "";
+
+      setSlots((current) => {
+        const currentSignature = current
+          .map(
+            (slot) =>
+              `${slot.slotKey}:${slot.available}:${slot.appointment?.id || ""}`,
+          )
+          .join("|");
+
+        const nextSignature = nextSlots
+          .map(
+            (slot) =>
+              `${slot.slotKey}:${slot.available}:${slot.appointment?.id || ""}`,
+          )
+          .join("|");
+
+        return currentSignature === nextSignature
+          ? current
+          : nextSlots;
+      });
+
+      setSlotsMode((current) =>
+        current === nextMode ? current : nextMode,
+      );
+
+      setSlotsNote((current) =>
+        current === nextNote ? current : nextNote,
+      );
+    } catch (error) {
+      if (!silent) {
+        setSlots([]);
+        toast.error(
+          error.response?.data?.message ||
+            "Unable to load appointment slots",
+        );
+      }
     } finally {
-      setSlotsLoading(false);
+      if (!silent) {
+        setSlotsLoading(false);
+      }
+    }
+  }
+
+  async function loadClinicDates(locationId) {
+    if (!locationId) {
+      setClinicDates([]);
+      return null;
+    }
+
+    const cached =
+      bookingOptionsCacheRef.current[
+        locationId
+      ];
+
+    if (cached) {
+      setClinicDates(cached.dates || []);
+      setClinicDatesLoading(false);
+      return cached;
+    }
+
+    try {
+      setClinicDatesLoading(true);
+
+      const result =
+        await getAppointmentBookingOptions(
+          [locationId],
+          localDateKey(),
+        );
+
+      const option =
+        result?.locations?.[locationId] || {
+          dates: [],
+          slotsByDate: {},
+        };
+
+      bookingOptionsCacheRef.current[
+        locationId
+      ] = option;
+
+      setClinicDates(option.dates || []);
+
+      return option;
+    } finally {
+      setClinicDatesLoading(false);
     }
   }
 
@@ -264,6 +347,8 @@ export default function Appointments() {
     void loadBase();
     void loadSearchAppointments();
   }, []);
+
+
 
   useEffect(() => {
     void loadAppointments(date);
@@ -288,85 +373,120 @@ export default function Appointments() {
   }, [date]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      void refreshPatientsSilently();
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     if (!showForm) return;
 
     void loadDateSchedule(form.dateKey);
   }, [showForm, form.dateKey]);
 
   useEffect(() => {
-    if (!showForm) return;
+    if (
+      !showForm ||
+      !form.dateKey ||
+      !form.locationId
+    ) {
+      return;
+    }
 
-    void loadSlots(form.dateKey, form.locationId);
-  }, [showForm, form.dateKey, form.locationId]);
+    const cachedSlots =
+      bookingOptionsCacheRef.current[
+        form.locationId
+      ]?.slotsByDate?.[
+        form.dateKey
+      ];
+
+    if (cachedSlots) {
+      setSlots(cachedSlots);
+      setSlotsLoading(false);
+
+      void loadSlots(
+        form.dateKey,
+        form.locationId,
+        { silent: true },
+      );
+
+      return;
+    }
+
+    void loadSlots(
+      form.dateKey,
+      form.locationId,
+    );
+  }, [
+    showForm,
+    form.dateKey,
+    form.locationId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !showForm ||
+      !form.dateKey ||
+      !form.locationId
+    ) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadSlots(
+          form.dateKey,
+          form.locationId,
+          { silent: true },
+        );
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [
+    showForm,
+    form.dateKey,
+    form.locationId,
+  ]);
 
   useEffect(() => {
     const patientId =
       new URLSearchParams(window.location.search).get("patient") || "";
 
-    if (!patientId || !patients.length) return;
+    if (!patientId) return;
 
-    const patient = patients.find((item) => item.id === patientId);
+    let active = true;
 
-    if (!patient) return;
+    void getPatient(patientId)
+      .then((patient) => {
+        if (!active || !patient) return;
 
-    setForm((current) => ({
-      ...current,
-      patientId,
-      category: patient.category || "",
-    }));
+        setPatients((current) => [
+          patient,
+          ...current.filter((item) => item.id !== patient.id),
+        ]);
 
-    setPatientQuery(patient.fullName);
-    setShowForm(true);
-  }, [patients]);
+        setForm((current) => ({
+          ...current,
+          patientId,
+          category: patient.category || "",
+        }));
+
+        setPatientQuery(patient.fullName);
+        setShowForm(true);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
 
-  const availableLocationIds = useMemo(
-    () =>
-      new Set(
-        dateSlots
-          .map((slot) => slot.locationId)
-          .filter(Boolean),
-      ),
-    [dateSlots],
-  );
 
-  const dateAvailableLocations = useMemo(
-    () =>
-      locations.filter((location) =>
-        availableLocationIds.has(location.id),
-      ),
-    [locations, availableLocationIds],
-  );
-
-  const formCities = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          dateAvailableLocations
-            .map((item) => item.city)
-            .filter(Boolean),
-        ),
-      ).sort(),
-    [dateAvailableLocations],
-  );
 
   const filteredAppointments = useMemo(() => {
     return appointments.filter((item) => {
       const location = item.location || {};
 
-      if (cityFilter !== "All" && location.city !== cityFilter) {
+      if (
+        cityFilter !== "All" &&
+        location.city !== cityFilter
+      ) {
         return false;
       }
 
@@ -379,8 +499,11 @@ export default function Appointments() {
 
       return true;
     });
-  }, [appointments, cityFilter, locationFilter]);
-
+  }, [
+    appointments,
+    cityFilter,
+    locationFilter,
+  ]);
 
   const activeAppointments = useMemo(
     () =>
@@ -461,123 +584,119 @@ export default function Appointments() {
     }));
   }, [activeAppointments]);
 
+  useEffect(() => {
+    const search = patientQuery.trim();
+
+    if (
+      search.length < 2 ||
+      form.patientId
+    ) {
+      return;
+    }
+
+    let active = true;
+
+    const timer = window.setTimeout(() => {
+      void getPatients(search, 8)
+        .then((items) => {
+          if (active) {
+            setPatients(items || []);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setPatients([]);
+          }
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [patientQuery, form.patientId]);
+
   const patientResults = useMemo(() => {
-    const query = patientQuery.trim().toLowerCase();
-
-    if (!query || form.patientId) return [];
-
-    return patients
-      .filter((patient) =>
-        [
-          patient.fullName,
-          patient.mobile,
-          patient.whatsapp,
-          patient.patientCode,
-          patient.city,
-          patient.category,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query),
-      )
-      .slice(0, 8);
+    if (!patientQuery.trim() || form.patientId) return [];
+    return patients.slice(0, 8);
   }, [patients, patientQuery, form.patientId]);
 
+  useEffect(() => {
+    const search = doctorSearch.trim();
+
+    if (search.length < 2) {
+      return;
+    }
+
+    let active = true;
+
+    const timer = window.setTimeout(() => {
+      void getPatients(search, 8)
+        .then((items) => {
+          if (active) {
+            setPatients(items || []);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setPatients([]);
+          }
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [doctorSearch]);
+
   const doctorSearchResults = useMemo(() => {
-    const query = doctorSearch.trim().toLowerCase();
+    const query = doctorSearch.trim();
 
     if (!query) return [];
 
     const today = localDateKey();
 
-    return patients
-      .filter((patient) =>
-        [
-          patient.fullName,
-          patient.mobile,
-          patient.whatsapp,
-          patient.patientCode,
-          patient.category,
-          patient.city,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query),
-      )
-      .slice(0, 8)
-      .map((patient) => {
-        const patientAppointments =
-          searchAppointments
-            .filter(
-              (appointment) =>
-                appointment.patientId === patient.id &&
-                ![
-                  "Completed",
-                  "Cancelled",
-                  "No-show",
-                ].includes(appointment.status),
-            )
-            .sort((first, second) => {
-              const firstKey =
-                `${first.dateKey || ""} ${first.startTime || ""}`;
-
-              const secondKey =
-                `${second.dateKey || ""} ${second.startTime || ""}`;
-
-              return firstKey.localeCompare(secondKey);
-            });
-
-        const todayAppointment =
-          patientAppointments.find(
+    return patients.slice(0, 8).map((patient) => {
+      const patientAppointments =
+        searchAppointments
+          .filter(
             (appointment) =>
-              appointment.dateKey === today,
-          );
+              appointment.patientId === patient.id &&
+              ![
+                "Completed",
+                "Cancelled",
+                "No-show",
+              ].includes(appointment.status),
+          )
+          .sort((first, second) => {
+            const firstKey =
+              `${first.dateKey || ""} ${first.startTime || ""}`;
 
-        return {
-          patient,
-          appointment:
-            todayAppointment ||
-            patientAppointments[0] ||
-            null,
-        };
-      });
+            const secondKey =
+              `${second.dateKey || ""} ${second.startTime || ""}`;
+
+            return firstKey.localeCompare(secondKey);
+          });
+
+      const todayAppointment =
+        patientAppointments.find(
+          (appointment) =>
+            appointment.dateKey === today,
+        );
+
+      return {
+        patient,
+        appointment:
+          todayAppointment ||
+          patientAppointments[0] ||
+          null,
+      };
+    });
   }, [
     patients,
     doctorSearch,
     searchAppointments,
-  ]);
-
-  useEffect(() => {
-    if (!showForm || !form.dateKey || dateScheduleLoading) {
-      return;
-    }
-
-    const locationStillValid =
-      !form.locationId ||
-      availableLocationIds.has(form.locationId);
-
-    const cityStillValid =
-      !form.city ||
-      formCities.includes(form.city);
-
-    if (!locationStillValid || !cityStillValid) {
-      setForm((current) => ({
-        ...current,
-        startTime: "",
-      }));
-
-      setSlots([]);
-    }
-  }, [
-    showForm,
-    form.dateKey,
-    form.city,
-    form.locationId,
-    dateScheduleLoading,
-    availableLocationIds,
-    formCities,
   ]);
 
   const selectedPatient = patients.find(
@@ -602,11 +721,24 @@ export default function Appointments() {
     : null;
 
   function updateForm(key, value) {
+    const resetFlow =
+      key === "dateKey" ||
+      key === "locationId";
+
+    if (resetFlow) {
+      setPatientQuery("");
+      setShowNewPatient(false);
+    }
+
     setForm((current) => ({
       ...current,
       [key]: value,
-      ...(key === "dateKey" || key === "locationId"
-        ? { startTime: "" }
+      ...(resetFlow
+        ? {
+            startTime: "",
+            patientId: "",
+            category: "",
+          }
         : {}),
     }));
   }
@@ -1157,38 +1289,102 @@ export default function Appointments() {
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                    {["Jaipur", "Kota", "Jodhpur", "Sikar", "Ajmer"].map(
-                      (clinicCity) => {
-                        const location = locations.find(
-                          (item) =>
-                            item.active !== false &&
-                            String(item.city || "").toLowerCase() ===
-                              clinicCity.toLowerCase(),
-                        );
+                    {locations
+                      .filter((location) => location.active !== false)
+                      .map((location) => {
+                        const clinicCity =
+                          location.city ||
+                          location.name ||
+                          "Clinic";
 
                         const selected =
-                          location?.id === form.locationId;
+                          location.id === form.locationId;
 
                         return (
                           <button
-                            key={clinicCity}
+                            key={location.id}
                             type="button"
-                            disabled={!location}
-                            onClick={() => {
+                            onClick={async () => {
                               if (!location) return;
+
+                              setSlots([]);
+                              setSlotsMode("");
+                              setSlotsNote("");
+                              setPatientQuery("");
+                              setShowNewPatient(false);
 
                               setForm((current) => ({
                                 ...current,
                                 city: clinicCity,
-                                locationId: location.id,
+                                locationId:
+                                  location.id,
+                                dateKey: "",
                                 startTime: "",
+                                patientId: "",
+                                category: "",
                               }));
 
-                              setNewPatient((current) => ({
-                                ...current,
-                                city: current.city || clinicCity,
-                                state: current.state || "Rajasthan",
-                              }));
+                              setNewPatient(
+                                (current) => ({
+                                  ...current,
+                                  city:
+                                    current.city ||
+                                    clinicCity,
+                                  state:
+                                    current.state ||
+                                    "Rajasthan",
+                                }),
+                              );
+
+                              let option =
+                                bookingOptionsCacheRef
+                                  .current[
+                                  location.id
+                                ];
+
+                              if (option) {
+                                setClinicDates(
+                                  option.dates || [],
+                                );
+                                setClinicDatesLoading(
+                                  false,
+                                );
+                              } else {
+                                option =
+                                  await loadClinicDates(
+                                    location.id,
+                                  );
+                              }
+
+                              const dates =
+                                option?.dates || [];
+
+                              const firstDate =
+                                dates.find(
+                                  (item) =>
+                                    item.availableCount > 0,
+                                ) || dates[0];
+
+                              if (!firstDate?.dateKey) {
+                                return;
+                              }
+
+                              const cachedSlots =
+                                option?.slotsByDate?.[
+                                  firstDate.dateKey
+                                ] || [];
+
+                              setSlots(cachedSlots);
+                              setSlotsLoading(false);
+
+                              setForm(
+                                (current) => ({
+                                  ...current,
+                                  dateKey:
+                                    firstDate.dateKey,
+                                  startTime: "",
+                                }),
+                              );
                             }}
                             className={`rounded-xl border px-4 py-4 text-left transition ${
                               selected
@@ -1236,20 +1432,78 @@ export default function Appointments() {
                     </div>
                   </div>
 
-                  <div className="mt-4 max-w-sm">
-                    <label className="text-sm font-medium text-slate-700">
-                      Appointment Date
-                      <input
-                        type="date"
-                        min={localDateKey()}
-                        value={form.dateKey}
-                        disabled={!form.locationId}
-                        onChange={(event) =>
-                          updateForm("dateKey", event.target.value)
-                        }
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 outline-none focus:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                    </label>
+                  <div className="mt-4">
+                    {!form.locationId ? (
+                      <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-400">
+                        Select clinic first.
+                      </div>
+                    ) : clinicDatesLoading ? (
+                      <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-sm font-medium text-indigo-700">
+                        Loading doctor dates...
+                      </div>
+                    ) : clinicDates.length ? (
+                      <>
+                        <p className="text-sm font-medium text-slate-700">
+                          Available Dates
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {clinicDates.map((item) => (
+                            <button
+                              key={item.dateKey}
+                              type="button"
+                              onClick={() => {
+                                const cachedSlots =
+                                  bookingOptionsCacheRef
+                                    .current[
+                                    form.locationId
+                                  ]?.slotsByDate?.[
+                                    item.dateKey
+                                  ];
+
+                                if (cachedSlots) {
+                                  setSlots(cachedSlots);
+                                  setSlotsLoading(false);
+                                }
+
+                                updateForm(
+                                  "dateKey",
+                                  item.dateKey,
+                                );
+                              }}
+                              className={`rounded-xl border px-4 py-3 text-left transition ${
+                                form.dateKey === item.dateKey
+                                  ? "border-indigo-600 bg-indigo-600 text-white"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50"
+                              }`}
+                            >
+                              <span className="block text-sm font-semibold">
+                                {new Date(
+                                  `${item.dateKey}T00:00:00`,
+                                ).toLocaleDateString(
+                                  "en-IN",
+                                  {
+                                    weekday: "short",
+                                    day: "numeric",
+                                    month: "short",
+                                  },
+                                )}
+                              </span>
+
+                              <span className="mt-1 block text-xs opacity-75">
+                                {item.availableCount
+                                  ? `${item.availableCount} slots`
+                                  : "Fully booked"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm font-medium text-amber-800">
+                        No upcoming doctor dates found.
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-5">
@@ -1316,7 +1570,9 @@ export default function Appointments() {
                         Patient Details
                       </p>
                       <p className="text-xs text-slate-500">
-                        Search an existing patient or add a new patient.
+                        {form.startTime
+                          ? "Search an existing patient or add a new patient."
+                          : "Select a time slot first."}
                       </p>
                     </div>
                   </div>
@@ -1360,12 +1616,13 @@ export default function Appointments() {
                           />
 
                           <input
+                            disabled={!form.startTime}
                             value={patientQuery}
                             onChange={(event) =>
                               setPatientQuery(event.target.value)
                             }
                             placeholder="Search by patient name, mobile or patient ID..."
-                            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-400"
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-3 text-sm outline-none focus:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
                           />
                         </div>
 
@@ -1398,7 +1655,7 @@ export default function Appointments() {
 
                         <button
                           type="button"
-                          disabled={!form.locationId}
+                          disabled={!form.startTime}
                           onClick={() => {
                             setShowNewPatient(true);
 
@@ -1515,13 +1772,23 @@ export default function Appointments() {
                         }
                         className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal"
                       >
-                        {["Jaipur", "Kota", "Jodhpur", "Sikar", "Ajmer"].map(
-                          (district) => (
-                            <option key={district} value={district}>
-                              {district}
-                            </option>
+                        {Array.from(
+                          new Set(
+                            locations
+                              .filter(
+                                (location) =>
+                                  location.active !== false,
+                              )
+                              .map((location) =>
+                                String(location.city || "").trim(),
+                              )
+                              .filter(Boolean),
                           ),
-                        )}
+                        ).map((district) => (
+                          <option key={district} value={district}>
+                            {district}
+                          </option>
+                        ))}
                       </select>
                     </label>
                   </div>

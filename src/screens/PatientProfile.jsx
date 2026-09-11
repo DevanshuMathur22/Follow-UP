@@ -84,7 +84,7 @@ export default function PatientProfile() {
       setPatient(patientData);
 
       const results = await Promise.allSettled([
-        getFollowUps(),
+        getFollowUps(patientId),
         getPrescriptions(patientId),
         getCategories(),
         getActivityLogs({
@@ -105,22 +105,11 @@ export default function PatientProfile() {
           ? result.value
           : [];
 
-      const matchingPatient = (item) =>
-        String(
-          item.patientId ||
-            item.patient?.id ||
-            item.patient?._id ||
-            item.patient ||
-            "",
-        ) === String(patientId);
 
       setCategories(resultValue(categoriesResult));
 
       setRelated({
-        followUps:
-          resultValue(followUpsResult).filter(
-            matchingPatient,
-          ),
+          followUps: resultValue(followUpsResult),
         prescriptions: resultValue(prescriptionsResult),
         activities: resultValue(activitiesResult),
       });
@@ -496,7 +485,27 @@ export default function PatientProfile() {
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-50 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Diagnosis
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    {patient.diagnosis || "Not recorded"}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-rose-50/60 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-500">
+                    Allergies
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">
+                    {patient.allergies || "No known allergies"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
               <span className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600">
                 {patient.category || "Other"}
               </span>

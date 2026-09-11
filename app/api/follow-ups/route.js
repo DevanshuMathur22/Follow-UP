@@ -44,7 +44,7 @@ async function syncPatientNextFollowUp(patientId) {
   });
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
     const sessionUser = await getSessionUser();
 
@@ -67,7 +67,131 @@ export async function GET() {
       return forbiddenResponse();
     }
 
+    const { searchParams } = new URL(request.url);
+
+    if (searchParams.get("dashboard") === "1") {
+      const now = new Date(searchParams.get("now") || "");
+      const dayEnd = new Date(searchParams.get("dayEnd") || "");
+
+      if (
+        Number.isNaN(now.getTime()) ||
+        Number.isNaN(dayEnd.getTime())
+      ) {
+        return Response.json(
+          {
+            success: false,
+            message: "Invalid dashboard date range",
+          },
+          { status: 400 },
+        );
+      }
+
+      const closed = [
+        "Completed",
+        "completed",
+        "Complete",
+        "complete",
+        "Cancelled",
+        "cancelled",
+        "Canceled",
+        "canceled",
+      ];
+
+      const forcedOverdue = [
+        "Overdue",
+        "overdue",
+        "Missed",
+        "missed",
+      ];
+
+      const overdueWhere = {
+        OR: [
+          {
+            status: {
+              in: forcedOverdue,
+            },
+          },
+          {
+            status: {
+              notIn: closed,
+            },
+            dueDate: {
+              lt: now,
+            },
+          },
+        ],
+      };
+
+      const todayWhere = {
+        status: {
+          notIn: [...closed, ...forcedOverdue],
+        },
+        dueDate: {
+          gte: now,
+          lte: dayEnd,
+        },
+      };
+
+      const patient = {
+        select: {
+          id: true,
+          fullName: true,
+          mobile: true,
+          whatsapp: true,
+          city: true,
+          category: true,
+        },
+      };
+
+      const [
+        overdueCount,
+        todayCount,
+        overdueItems,
+        todayItems,
+      ] = await Promise.all([
+        prisma.followUp.count({ where: overdueWhere }),
+        prisma.followUp.count({ where: todayWhere }),
+        prisma.followUp.findMany({
+          where: overdueWhere,
+          orderBy: { dueDate: "asc" },
+          take: 5,
+          include: { patient },
+        }),
+        prisma.followUp.findMany({
+          where: todayWhere,
+          orderBy: { dueDate: "asc" },
+          take: 5,
+          include: { patient },
+        }),
+      ]);
+
+      return Response.json({
+        success: true,
+        followUps: [...overdueItems, ...todayItems],
+        counts: {
+          today: todayCount,
+          overdue: overdueCount,
+        },
+      });
+    }
+
+    const patientId =
+      searchParams.get("patientId") || "";
+
+    if (patientId && !validObjectId(patientId)) {
+      return Response.json(
+        {
+          success: false,
+          message: "Invalid patient ID",
+        },
+        { status: 400 },
+      );
+    }
+
     const followUps = await prisma.followUp.findMany({
+      where: patientId
+        ? { patientId }
+        : undefined,
       include: {
         patient: true,
       },

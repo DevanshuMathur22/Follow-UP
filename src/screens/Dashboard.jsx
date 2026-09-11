@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarDays,
   Clock3,
@@ -12,13 +12,11 @@ import CallQueue from "../components/dashboard/CallQueue";
 import RecentActivity from "../components/dashboard/RecentActivity";
 import RecentPatients from "../components/dashboard/RecentPatients";
 import StatCard from "../components/dashboard/StatCard";
-import { getCurrentUser } from "../services/authService";
 import {
   getActivityLogs,
   getAppointments,
-  getFollowUpStatus,
-  getFollowUps,
-  getPatients,
+  getDashboardFollowUps,
+  getDashboardPatients,
 } from "../services/clinicService";
 
 function localDateKey(value) {
@@ -57,7 +55,10 @@ function appointmentClosed(status) {
 export default function Dashboard() {
   const [data, setData] = useState({
     patients: [],
+    totalPatients: 0,
     followUps: [],
+    todayFollowUps: 0,
+    overdueFollowUps: 0,
     appointments: [],
     activities: [],
   });
@@ -71,6 +72,24 @@ export default function Dashboard() {
 
   const [doctorName, setDoctorName] =
     useState("Doctor");
+
+  useEffect(() => {
+    try {
+      const user = JSON.parse(
+        window.localStorage.getItem("caretrack-user") || "null",
+      );
+
+      const name = String(user?.name || "")
+        .replace(/^Dr\.?\s*/i, "")
+        .trim();
+
+      if (name) {
+        setDoctorName(name);
+      }
+    } catch {
+      void 0;
+    }
+  }, []);
 
   async function loadDashboard({
     silent = false,
@@ -87,8 +106,8 @@ export default function Dashboard() {
       appointmentsResult,
       activitiesResult,
     ] = await Promise.allSettled([
-      getPatients(),
-      getFollowUps(),
+      getDashboardPatients(),
+      getDashboardFollowUps(),
       getAppointments({
         date: today,
       }),
@@ -100,20 +119,30 @@ export default function Dashboard() {
     setData({
       patients:
         patientsResult.status === "fulfilled"
-          ? patientsResult.value
+          ? patientsResult.value.patients
           : [],
+      totalPatients:
+        patientsResult.status === "fulfilled"
+          ? patientsResult.value.totalCount
+          : 0,
       followUps:
         followUpsResult.status === "fulfilled"
-          ? followUpsResult.value
+          ? followUpsResult.value.followUps
           : [],
+      todayFollowUps:
+        followUpsResult.status === "fulfilled"
+          ? followUpsResult.value.counts.today
+          : 0,
+      overdueFollowUps:
+        followUpsResult.status === "fulfilled"
+          ? followUpsResult.value.counts.overdue
+          : 0,
       appointments:
-        appointmentsResult.status ===
-        "fulfilled"
+        appointmentsResult.status === "fulfilled"
           ? appointmentsResult.value
           : [],
       activities:
-        activitiesResult.status ===
-        "fulfilled"
+        activitiesResult.status === "fulfilled"
           ? activitiesResult.value
           : [],
     });
@@ -126,19 +155,6 @@ export default function Dashboard() {
   useEffect(() => {
     void loadDashboard();
 
-    void getCurrentUser()
-      .then((user) => {
-        const name = String(
-          user?.name || "",
-        )
-          .replace(/^Dr\.?\s*/i, "")
-          .trim();
-
-        if (name) {
-          setDoctorName(name);
-        }
-      })
-      .catch(() => {});
 
     const refresh = () => {
       if (
@@ -193,33 +209,6 @@ export default function Dashboard() {
       window.clearInterval(timer);
   }, []);
 
-  const liveFollowUps = useMemo(
-    () =>
-      data.followUps.map(
-        (followUp) => ({
-          ...followUp,
-          status: getFollowUpStatus(
-            followUp.status,
-            followUp.dueDate,
-            now,
-          ),
-        }),
-      ),
-    [data.followUps, now],
-  );
-
-  const todayFollowUps =
-    liveFollowUps.filter(
-      (followUp) =>
-        followUp.status === "Today",
-    ).length;
-
-  const overdueFollowUps =
-    liveFollowUps.filter(
-      (followUp) =>
-        followUp.status === "Overdue",
-    ).length;
-
   const activeTodayAppointments =
     data.appointments.filter(
       (appointment) =>
@@ -231,7 +220,7 @@ export default function Dashboard() {
   const stats = [
     {
       title: "Total Patients",
-      value: data.patients.length,
+      value: data.totalPatients,
       detail: "Active patient records",
       icon: UsersRound,
       tone: "indigo",
@@ -245,14 +234,14 @@ export default function Dashboard() {
     },
     {
       title: "Today's Follow-ups",
-      value: todayFollowUps,
+      value: data.todayFollowUps,
       detail: "Due today",
       icon: Clock3,
       tone: "teal",
     },
     {
       title: "Overdue Follow-ups",
-      value: overdueFollowUps,
+      value: data.overdueFollowUps,
       detail: "Needs attention",
       icon: TriangleAlert,
       tone: "amber",
@@ -310,7 +299,7 @@ export default function Dashboard() {
 
       <section className="mt-5 grid gap-5 xl:grid-cols-2">
         <CallQueue
-          followUps={liveFollowUps}
+          followUps={data.followUps}
           loading={loading}
         />
 
