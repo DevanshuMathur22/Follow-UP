@@ -14,10 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import {
-  usePathname,
-  useRouter,
-} from "next/navigation";
+import { usePathname } from "next/navigation";
 import { logoutUser } from "../../services/authService";
 import {
   hasPermission,
@@ -119,7 +116,6 @@ export default function Sidebar({
   onNavigate,
 }) {
   const pathname = usePathname();
-  const router = useRouter();
 
   return (
     <aside
@@ -234,8 +230,7 @@ export default function Sidebar({
             try {
               await logoutUser();
             } finally {
-              router.replace("/");
-              router.refresh();
+              window.location.replace("/");
             }
           }}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"

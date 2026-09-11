@@ -19,30 +19,45 @@ import {
   permissions,
 } from "../lib/permissions";
 
+let patientsCache = null;
+let patientsCacheAt = 0;
+const PATIENTS_CACHE_TTL = 10_000;
+
 export default function Patients() {
-  const [patients, setPatients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [patients, setPatients] = useState(
+    () => patientsCache || [],
+  );
+  const [loading, setLoading] = useState(
+    () => patientsCache === null,
+  );
   const [error, setError] = useState("");
   const [canArchive, setCanArchive] = useState(false);
 
   async function loadPatients({ silent = false } = {}) {
-    try {
-      setError("");
+    const background =
+      silent || patientsCache !== null;
 
-      if (!silent) {
+    try {
+      if (!background) {
+        setError("");
         setLoading(true);
       }
 
-      setPatients(await getPatients());
+      const nextPatients = await getPatients();
+
+      patientsCache = nextPatients;
+      patientsCacheAt = Date.now();
+      setPatients(nextPatients);
+      setError("");
     } catch (loadError) {
-      if (!silent) {
+      if (!background) {
         setError(
           loadError.response?.data?.message ||
             "Patients could not be loaded.",
         );
       }
     } finally {
-      if (!silent) {
+      if (!background) {
         setLoading(false);
       }
     }
@@ -83,11 +98,16 @@ export default function Patients() {
     try {
       await archivePatient(patient.id);
 
-      setPatients((current) =>
-        current.filter(
+      setPatients((current) => {
+        const nextPatients = current.filter(
           (item) => item.id !== patient.id,
-        ),
-      );
+        );
+
+        patientsCache = nextPatients;
+        patientsCacheAt = Date.now();
+
+        return nextPatients;
+      });
 
       toast.success("Patient archived");
     } catch (archiveError) {
@@ -99,11 +119,28 @@ export default function Patients() {
   }
 
   useEffect(() => {
-    void loadPatients();
+    const cacheFresh =
+      patientsCache !== null &&
+      Date.now() - patientsCacheAt <
+        PATIENTS_CACHE_TTL;
+
+    if (!cacheFresh) {
+      void loadPatients({
+        silent: patientsCache !== null,
+      });
+    }
+
     loadAccess();
 
     const refresh = () => {
-      if (document.visibilityState === "visible") {
+      const stale =
+        Date.now() - patientsCacheAt >=
+        PATIENTS_CACHE_TTL;
+
+      if (
+        document.visibilityState === "visible" &&
+        stale
+      ) {
         void loadPatients({ silent: true });
       }
     };

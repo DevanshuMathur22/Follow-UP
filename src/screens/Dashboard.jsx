@@ -52,19 +52,28 @@ function appointmentClosed(status) {
   ].includes(String(status || ""));
 }
 
-export default function Dashboard() {
-  const [data, setData] = useState({
-    patients: [],
-    totalPatients: 0,
-    followUps: [],
-    todayFollowUps: 0,
-    overdueFollowUps: 0,
-    appointments: [],
-    activities: [],
-  });
+const emptyDashboardData = {
+  patients: [],
+  totalPatients: 0,
+  followUps: [],
+  todayFollowUps: 0,
+  overdueFollowUps: 0,
+  appointments: [],
+  activities: [],
+};
 
-  const [loading, setLoading] =
-    useState(true);
+let dashboardCache = null;
+let dashboardCacheAt = 0;
+const DASHBOARD_CACHE_TTL = 10_000;
+
+export default function Dashboard() {
+  const [data, setData] = useState(
+    () => dashboardCache || emptyDashboardData,
+  );
+
+  const [loading, setLoading] = useState(
+    () => dashboardCache === null,
+  );
 
   const [now, setNow] = useState(
     () => new Date(),
@@ -94,7 +103,10 @@ export default function Dashboard() {
   async function loadDashboard({
     silent = false,
   } = {}) {
-    if (!silent) {
+    const showLoading =
+      !silent && dashboardCache === null;
+
+    if (showLoading) {
       setLoading(true);
     }
 
@@ -116,50 +128,69 @@ export default function Dashboard() {
       }),
     ]);
 
-    setData({
+    const fallback =
+      dashboardCache || emptyDashboardData;
+
+    const nextData = {
       patients:
         patientsResult.status === "fulfilled"
           ? patientsResult.value.patients
-          : [],
+          : fallback.patients,
       totalPatients:
         patientsResult.status === "fulfilled"
           ? patientsResult.value.totalCount
-          : 0,
+          : fallback.totalPatients,
       followUps:
         followUpsResult.status === "fulfilled"
           ? followUpsResult.value.followUps
-          : [],
+          : fallback.followUps,
       todayFollowUps:
         followUpsResult.status === "fulfilled"
           ? followUpsResult.value.counts.today
-          : 0,
+          : fallback.todayFollowUps,
       overdueFollowUps:
         followUpsResult.status === "fulfilled"
           ? followUpsResult.value.counts.overdue
-          : 0,
+          : fallback.overdueFollowUps,
       appointments:
         appointmentsResult.status === "fulfilled"
           ? appointmentsResult.value
-          : [],
+          : fallback.appointments,
       activities:
         activitiesResult.status === "fulfilled"
           ? activitiesResult.value
-          : [],
-    });
+          : fallback.activities,
+    };
 
-    if (!silent) {
+    dashboardCache = nextData;
+    dashboardCacheAt = Date.now();
+    setData(nextData);
+
+    if (showLoading) {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadDashboard();
+    const cacheFresh =
+      dashboardCache !== null &&
+      Date.now() - dashboardCacheAt <
+        DASHBOARD_CACHE_TTL;
 
+    if (!cacheFresh) {
+      void loadDashboard({
+        silent: dashboardCache !== null,
+      });
+    }
 
     const refresh = () => {
+      const stale =
+        Date.now() - dashboardCacheAt >=
+        DASHBOARD_CACHE_TTL;
+
       if (
-        document.visibilityState ===
-        "visible"
+        document.visibilityState === "visible" &&
+        stale
       ) {
         void loadDashboard({
           silent: true,
