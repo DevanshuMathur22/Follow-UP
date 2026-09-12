@@ -20,10 +20,7 @@ const rolePermissions = {
   staff: new Set([
     permissions.VIEW_PATIENTS,
     permissions.EDIT_PATIENTS,
-    permissions.MANAGE_FOLLOW_UPS,
     permissions.MANAGE_APPOINTMENTS,
-    permissions.MANAGE_PRESCRIPTIONS,
-    permissions.MANAGE_CERTIFICATES,
   ]),
 };
 

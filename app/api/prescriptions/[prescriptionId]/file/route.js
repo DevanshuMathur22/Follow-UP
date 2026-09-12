@@ -32,7 +32,7 @@ export async function GET(request, { params }) {
     if (
       !hasPermission(
         sessionUser.role,
-        permissions.VIEW_PATIENTS,
+        permissions.MANAGE_PRESCRIPTIONS,
       )
     ) {
       return forbiddenResponse();

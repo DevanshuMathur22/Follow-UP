@@ -5,6 +5,11 @@ import {
 } from "../../../src/lib/inputValidation";
 import { validateWriteOrigin } from "../../../src/lib/requestSecurity";
 import { getSessionUser } from "../../../src/lib/auth";
+import {
+  forbiddenResponse,
+  hasPermission,
+  permissions,
+} from "../../../src/lib/permissions";
 import prisma from "../../../src/lib/prisma";
 import { logActivity } from "../../../src/lib/activityLog";
 
@@ -116,6 +121,15 @@ export async function GET(request) {
       );
     }
 
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.VIEW_PATIENTS,
+      )
+    ) {
+      return forbiddenResponse();
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() || "";
     const requestedLimit = Number(searchParams.get("limit") || 0);
@@ -202,6 +216,15 @@ export async function POST(request) {
         },
         { status: 401 },
       );
+    }
+
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.EDIT_PATIENTS,
+      )
+    ) {
+      return forbiddenResponse();
     }
 
     const { data: body, error: bodyError } = await readJsonBody(request);

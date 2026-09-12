@@ -123,7 +123,12 @@ export default function Login() {
           : "Login successful",
       );
 
-      router.replace("/dashboard");
+      const destination =
+        String(data.user?.role || "").toLowerCase() === "staff"
+          ? "/assistant"
+          : "/dashboard";
+
+      router.replace(destination);
       router.refresh();
     } catch (error) {
       toast.error(

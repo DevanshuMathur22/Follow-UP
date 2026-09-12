@@ -42,6 +42,12 @@ function validateSession(token) {
   return verifySessionToken(token);
 }
 
+function homeForRole(session) {
+  return String(session?.role || "").toLowerCase() === "staff"
+    ? "/assistant"
+    : "/dashboard";
+}
+
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(SESSION_COOKIE)?.value;
@@ -57,7 +63,7 @@ export async function proxy(request) {
   if (pathname === "/") {
     if (session) {
       return NextResponse.redirect(
-        new URL("/dashboard", request.url)
+        new URL(homeForRole(session), request.url)
       );
     }
 
@@ -66,6 +72,26 @@ export async function proxy(request) {
 
   if (!session) {
     return loginRedirect(request);
+  }
+
+  const role = String(session.role || "").toLowerCase();
+
+  if (
+    pathname.startsWith("/assistant") &&
+    role !== "staff"
+  ) {
+    return NextResponse.redirect(
+      new URL("/dashboard", request.url)
+    );
+  }
+
+  if (
+    role === "staff" &&
+    !pathname.startsWith("/assistant")
+  ) {
+    return NextResponse.redirect(
+      new URL("/assistant", request.url)
+    );
   }
 
   const restricted = restrictedRoutes.find(
@@ -90,12 +116,15 @@ export const config = {
   matcher: [
     "/",
     "/dashboard/:path*",
+    "/assistant/:path*",
     "/patients/:path*",
     "/follow-ups/:path*",
     "/categories/:path*",
     "/activity/:path*",
     "/analytics/:path*",
     "/appointments/:path*",
+"/certificates/:path*",
+"/availability/:path*",
     "/prescriptions/:path*",
     "/reports/:path*",
     "/invoices/:path*",

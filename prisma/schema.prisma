@@ -81,10 +81,11 @@ model Patient {
   createdBy User? @relation("PatientCreatedBy", fields: [createdById], references: [id])
   deletedBy User? @relation("PatientDeletedBy", fields: [deletedById], references: [id])
 
-  followUps     FollowUp[]
-  prescriptions Prescription[]
-  certificates  Certificate[]
-  appointments  Appointment[]
+  followUps       FollowUp[]
+  prescriptions   Prescription[]
+  certificates    Certificate[]
+  appointments    Appointment[]
+  preVisitIntakes PreVisitIntake[]
 
   @@index([fullName])
   @@index([mobile])
@@ -377,6 +378,8 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  preVisitIntake PreVisitIntake?
+
   @@index([dateKey])
   @@index([scheduledAt])
   @@index([status])
@@ -387,6 +390,42 @@ model Appointment {
   @@index([locationId, dateKey, startTime])
   @@index([patientId, dateKey])
   @@map("appointments")
+}
+
+model PreVisitIntake {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+
+  appointmentId String      @unique @db.ObjectId
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+
+  patientId String  @db.ObjectId
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  bloodPressure String?
+  pulse         String?
+  spo2          String?
+  temperature   String?
+  height        String?
+  weight        String?
+
+  complaints              String?
+  historyOfPresentIllness String?
+  pastFamilyHistory       String?
+  personalHistory         String?
+  investigations          String?
+  examination             String?
+  allergies               String?
+  provisionalDiagnosis    String?
+  assistantNotes          String?
+
+  createdById String? @db.ObjectId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([updatedAt])
+  @@map("preVisitIntakes")
 }
 
 model CertificateTemplate {

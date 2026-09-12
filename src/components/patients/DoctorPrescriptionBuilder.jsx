@@ -653,6 +653,7 @@ window.onload=function(){
 
 export default function DoctorPrescriptionBuilder({
   patient,
+  intake = null,
   previousPrescription = null,
   onSaved,
   onCancel,
@@ -667,27 +668,33 @@ export default function DoctorPrescriptionBuilder({
   const initial = useMemo(
     () => ({
       diagnosis:
+        intake?.provisionalDiagnosis ||
         previousPrescription?.diagnosis ||
         patient?.diagnosis ||
         "",
       complaints:
+        intake?.complaints ||
         previousPrescription?.complaints ||
         "",
       historyOfPresentIllness:
+        intake?.historyOfPresentIllness ||
         previousPrescription
           ?.historyOfPresentIllness ||
         "",
       pastFamilyHistory:
+        intake?.pastFamilyHistory ||
         previousPrescription
           ?.pastFamilyHistory ||
         "",
       examination:
+        intake?.examination ||
         previousPrescription?.examination ||
         "",
       advice:
         previousPrescription?.advice ||
         "",
       testsPrescribed:
+        intake?.investigations ||
         previousPrescription
           ?.testsPrescribed ||
         "",
@@ -697,6 +704,7 @@ export default function DoctorPrescriptionBuilder({
     }),
     [
       patient?.diagnosis,
+      intake,
       previousPrescription,
     ],
   );

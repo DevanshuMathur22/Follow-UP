@@ -59,6 +59,7 @@ function sorted(items) {
 
 export default function PatientPrescriptions({
   patient,
+  intake = null,
   prescriptions = [],
   onRefresh,
   doctorMode = false,
@@ -322,6 +323,7 @@ export default function PatientPrescriptions({
         <div className="mt-5">
           <DoctorPrescriptionBuilder
             patient={patient}
+            intake={intake}
             previousPrescription={
                 builderReference
             }

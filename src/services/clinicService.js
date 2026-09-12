@@ -1366,3 +1366,45 @@ export async function getAppointmentBookingOptions(
     }),
   );
 }
+
+
+export async function getAppointmentIntake(appointmentId) {
+  const result = unwrap(
+    await api.get(
+      `/appointments/${appointmentId}/intake`,
+    ),
+  );
+
+  return result?.intake || null;
+}
+
+export async function getAppointmentIntakeContext(
+  appointmentId,
+) {
+  const result = unwrap(
+    await api.get(
+      `/appointments/${appointmentId}/intake`,
+    ),
+  );
+
+  return {
+    intake: result?.intake || null,
+    previousVisit:
+      result?.previousVisit || null,
+  };
+}
+
+
+export async function saveAppointmentIntake(
+  appointmentId,
+  input,
+) {
+  const result = unwrap(
+    await api.put(
+      `/appointments/${appointmentId}/intake`,
+      input,
+    ),
+  );
+
+  return result?.intake || null;
+}

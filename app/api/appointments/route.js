@@ -127,6 +127,15 @@ export async function GET(request) {
       );
     }
 
+    if (
+      !hasPermission(
+        user.role,
+        permissions.MANAGE_APPOINTMENTS,
+      )
+    ) {
+      return forbiddenResponse();
+    }
+
     const { searchParams } = new URL(request.url);
 
     const date = searchParams.get("date");
@@ -206,10 +215,17 @@ export async function GET(request) {
               whatsapp: true,
               category: true,
               diagnosis: true,
+              allergies: true,
               city: true,
             },
           },
           location: true,
+          preVisitIntake: {
+            select: {
+              id: true,
+              updatedAt: true,
+            },
+          },
         },
         orderBy: [
           {

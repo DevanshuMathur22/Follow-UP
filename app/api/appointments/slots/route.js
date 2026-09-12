@@ -2,6 +2,11 @@ import { getSessionUser } from "../../../../src/lib/auth";
 import prisma from "../../../../src/lib/prisma";
 import { validObjectId } from "../../../../src/lib/inputValidation";
 import { resolveDoctorSchedule } from "../../../../src/lib/doctorSchedule";
+import {
+  forbiddenResponse,
+  hasPermission,
+  permissions,
+} from "../../../../src/lib/permissions";
 
 function validDateKey(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) {
@@ -83,6 +88,15 @@ export async function GET(request) {
         },
         { status: 401 },
       );
+    }
+
+    if (
+      !hasPermission(
+        user.role,
+        permissions.MANAGE_APPOINTMENTS,
+      )
+    ) {
+      return forbiddenResponse();
     }
 
     const { searchParams } = new URL(request.url);

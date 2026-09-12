@@ -124,6 +124,15 @@ export async function GET(request, { params }) {
       );
     }
 
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.VIEW_PATIENTS,
+      )
+    ) {
+      return forbiddenResponse();
+    }
+
     const { patientId } = await params;
 
     if (!validObjectId(patientId)) {
@@ -188,6 +197,15 @@ export async function PATCH(request, { params }) {
         },
         { status: 401 },
       );
+    }
+
+    if (
+      !hasPermission(
+        sessionUser.role,
+        permissions.EDIT_PATIENTS,
+      )
+    ) {
+      return forbiddenResponse();
     }
 
     const { patientId } = await params;

@@ -37,12 +37,17 @@ export async function GET(request) {
       );
     }
 
-    if (
-      !hasPermission(
+    const canReadSuggestions =
+      hasPermission(
         sessionUser.role,
         permissions.MANAGE_PRESCRIPTIONS,
-      )
-    ) {
+      ) ||
+      hasPermission(
+        sessionUser.role,
+        permissions.MANAGE_APPOINTMENTS,
+      );
+
+    if (!canReadSuggestions) {
       return forbiddenResponse();
     }
 

@@ -42,6 +42,7 @@ function statusClass(status) {
 
 export default function DoctorPatientWorkspace({
   patient,
+  intake = null,
   prescriptions = [],
   onRefresh,
   onDone,
@@ -49,6 +50,7 @@ export default function DoctorPatientWorkspace({
   saving = false,
 }) {
   const allergy =
+    intake?.allergies ||
     patient?.allergies ||
     patient?.allergy ||
     "";
@@ -160,9 +162,109 @@ export default function DoctorPatientWorkspace({
         </div>
       </section>
 
+        {intake && (
+          <section className="rounded-2xl border border-teal-200 bg-teal-50/40 p-4 shadow-sm sm:p-5">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">
+              Pre-Consultation Summary
+            </p>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase text-slate-400">
+                  Vitals
+                </p>
+                <p className="mt-1.5 text-sm text-slate-700">
+                  {[
+                    intake.bloodPressure ? `BP ${intake.bloodPressure}` : "",
+                    intake.pulse ? `Pulse ${intake.pulse}` : "",
+                    intake.spo2 ? `SpO2 ${intake.spo2}` : "",
+                    intake.temperature ? `Temp ${intake.temperature}` : "",
+                    intake.height ? `Ht ${intake.height}` : "",
+                    intake.weight ? `Wt ${intake.weight}` : "",
+                  ].filter(Boolean).join(" · ") || "Not recorded"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold uppercase text-slate-400">
+                  Complaints
+                </p>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">
+                  {intake.complaints || "Not recorded"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[11px] font-semibold uppercase text-slate-400">
+                  Provisional Diagnosis
+                </p>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm font-semibold text-slate-800">
+                  {intake.provisionalDiagnosis || "Not recorded"}
+                </p>
+              </div>
+
+              {intake.historyOfPresentIllness && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">
+                    Present History
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">
+                    {intake.historyOfPresentIllness}
+                  </p>
+                </div>
+              )}
+
+              {intake.pastFamilyHistory && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">
+                    Past / Family History
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">
+                    {intake.pastFamilyHistory}
+                  </p>
+                </div>
+              )}
+
+              {intake.examination && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">
+                    Examination
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">
+                    {intake.examination}
+                  </p>
+                </div>
+              )}
+
+              {intake.investigations && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">
+                    Investigations
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">
+                    {intake.investigations}
+                  </p>
+                </div>
+              )}
+
+              {intake.assistantNotes && (
+                <div>
+                  <p className="text-[11px] font-semibold uppercase text-slate-400">
+                    Assistant Notes
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">
+                    {intake.assistantNotes}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <PatientPrescriptions
           patient={patient}
+          intake={intake}
           prescriptions={
             prescriptions
           }

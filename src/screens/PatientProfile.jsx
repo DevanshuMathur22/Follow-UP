@@ -28,6 +28,7 @@ import {
   getPatient,
   getPrescriptions,
   getAppointment,
+  getAppointmentIntake,
   updateAppointment,
   updatePatient,
 } from "../services/clinicService";
@@ -61,6 +62,7 @@ export default function PatientProfile() {
     initialVisitStatus,
   );
   const [visitSaving, setVisitSaving] = useState(false);
+  const [visitIntake, setVisitIntake] = useState(null);
   const [
     appointmentUpdatedAt,
     setAppointmentUpdatedAt,
@@ -140,6 +142,37 @@ export default function PatientProfile() {
   useEffect(() => {
     setVisitStatus(initialVisitStatus);
   }, [initialVisitStatus, appointmentId]);
+
+  useEffect(() => {
+    if (!appointmentId) {
+      setVisitIntake(null);
+      return;
+    }
+
+    let active = true;
+
+    async function loadVisitIntake() {
+      try {
+        const intake = await getAppointmentIntake(
+          appointmentId,
+        );
+
+        if (active) {
+          setVisitIntake(intake);
+        }
+      } catch {
+        if (active) {
+          setVisitIntake(null);
+        }
+      }
+    }
+
+    void loadVisitIntake();
+
+    return () => {
+      active = false;
+    };
+  }, [appointmentId]);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -346,6 +379,7 @@ export default function PatientProfile() {
       {appointmentId ? (
         <DoctorPatientWorkspace
           patient={patient}
+            intake={visitIntake}
           prescriptions={related.prescriptions}
           onRefresh={loadProfile}
           saving={visitSaving}
